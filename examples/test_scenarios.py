@@ -27,6 +27,8 @@ def loop_env(env):
             rng, key = jax.random.split(rng, 2)
             state, obs, r, a, d = env.step(state, action, key)
             img = viewer.draw(env, state, obs)
+
+            img = img[0:2*img.shape[0]//3]
             cv2.imwrite(f"video/scenario/frame_{frame_idx:05d}.png", img)
             if viewer.should_pause:
                 return
@@ -35,6 +37,8 @@ def loop_env(env):
             time.sleep(SLEEP_TIME)
             t += 1
             frame_idx += 1
+        if frame_idx>400:
+            sys.exit(1)
 
 def get_custom_scenario():
     builder = ScenarioBuilder()
@@ -62,7 +66,7 @@ def get_custom_scenario():
     return GigastepEnv(**builder.get_kwargs())
 
 if __name__ == "__main__":
-    # convert -delay 5 -loop 0 video/scenario/frame_*.png video/scenario.gif
+    # convert -delay 3 -loop 0 video/scenario/frame_*.png video/scenario.webp
     loop_env(env = get_custom_scenario())
     loop_env(env = get_5v5_env())
     loop_env(env = get_3v3_env())

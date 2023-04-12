@@ -1,6 +1,6 @@
 # Gigastep - 1 billion steps per second multi-agent RL
 
-![Gigastep](misc/banner.webp)  
+![Gigastep](misc/scenario.webp)  
 
 ## Installation
 

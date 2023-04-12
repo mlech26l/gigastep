@@ -115,6 +115,7 @@ class GigastepViewer:
         self._show_image(frame_buffer)
         self.poll()
         self.clock.tick(60)
+        frame_buffer = cv2.cvtColor(frame_buffer, cv2.COLOR_RGB2BGR)
         return np.transpose(frame_buffer,[1,0,2])
 
     def _show_image(self, image):

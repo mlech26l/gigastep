@@ -2,13 +2,15 @@
 
 ![Gigastep](misc/scenario.webp)  
 
-## Installation
+## 🔽 Installation
 
 ```shell
 pip3 install gigastep
 ```
 
-## Features
+To install JAX with GPU support see [JAX installation instructions](https://github.com/google/jax#installation)
+
+## ✨ Features
 
 - Collaborative and adversarial multi-agent  
 - Partial observability (stochastic observations and communication)
@@ -18,7 +20,7 @@ pip3 install gigastep
 
 ![Gigastep](misc/concat.webp)
 
-## Usage
+## 🎓 Usage
 
 ```python
 from gigastep import GigastepEnv
@@ -42,7 +44,7 @@ while not ep_done:
 ```
 
 
-## Vectorized Environment
+## 🚀 Vectorized Environment 
 
 The ```eng.reset``` and ```eng.step``` functions are vectorized using ```jax.vmap``` and 
 accessible through the ```eng.v_reset``` and ```eng.v_step``` methods.
@@ -70,4 +72,62 @@ while not jnp.all(ep_dones):
     # rewards is a float32 array of shape [batch_size, n_agents]
     # dones is a bool array of shape [batch_size, n_agents]
     # ep_done is a bool array of shape [batch_size]
+```
+
+## 🎭 Scenarios (TODO: define scenarios)
+
+🚧 TODO: There should be a list of 10 to 20 built-in scenarios with different agent types and different
+The number of agents should be between 2 and 1000
+
+### List of built-in scenarios
+
+| Scenario         | Description                           |
+|------------------|---------------------------------------|
+| ```3v3```        | 3v3 scenario with default agent types |
+| ```5v5```        | 3v1 scenario with default agent types |
+| ```3v1```        | 3v1 scenario with                     |
+
+
+### Custom Scenario
+
+```python
+from gigastep import ScenarioBuilder
+
+def custom_3v1_scenario():
+    builder = ScenarioBuilder()
+       
+    # add two default type agents to team zero
+    builder.add_default_type(0)
+    builder.add_default_type(0)
+    
+    # add tank type agent to team zero
+    builder.add_tank_type(0)
+    
+    # add new agent type with increased health and range to team one 
+    builder.add(1,sprite=5, max_health=2, range=2)
+    
+    return builder.make()
+
+env = custom_3v1_scenario()
+assert env.n_agents == 4
+```
+
+## 🎬 Visualization (TODO)
+
+🚧 TODO
+
+## 📚 Documentation
+
+🚧 TODO
+
+## 📜 Citation
+
+If you use this code for your research, please cite our paper:
+
+```bibtex
+@misc{gigastep2023,
+  author = {Gigastep},
+  title = {Gigastep: 1 Billion Steps Per Second Multi-Agent Reinforcement Learning},
+  year = {2023},
+}
 ```

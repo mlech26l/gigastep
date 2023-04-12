@@ -10,29 +10,30 @@ class ScenarioBuilder:
         self._per_agent_range = []
         self._per_agent_thrust = []
 
-    def add(self,team:int=0, sprites:int=1, max_health:float=1, range:float=1, thrust:float=1):
+    def add(self,team:int=0, sprite:int=1, max_health:float=1, range:float=1, thrust:float=1):
         self._per_agent_team.append(team)
-        self._per_agent_sprites.append(sprites)
+        self._per_agent_sprites.append(sprite)
         self._per_agent_max_health.append(max_health)
         self._per_agent_range.append(range)
         self._per_agent_thrust.append(thrust)
 
     def add_tank_type(self,team=0):
-        self.add(team=team, sprites=7, max_health=3, range=1, thrust=1)
+        self.add(team=team, sprite=7, max_health=3, range=1, thrust=1)
 
     def add_sniper_type(self,team=0):
-        self.add(team=team, sprites=3, max_health=1, range=2, thrust=1)
+        self.add(team=team, sprite=3, max_health=1, range=2, thrust=1)
 
     def add_ranger_type(self,team=0):
-        self.add(team=team, sprites=5, max_health=1, range=0, thrust=2)
+        self.add(team=team, sprite=5, max_health=1, range=0, thrust=2)
 
     def add_default_type(self,team=0):
-        self.add(team=team, sprites=1, max_health=1, range=1, thrust=1)
+        self.add(team=team, sprite=1, max_health=1, range=1, thrust=1)
 
     def add_special_type(self,team=0):
-        self.add(team=team, sprites=6, max_health=3, range=2, thrust=1.2)
+        self.add(team=team, sprite=6, max_health=3, range=2, thrust=1.2)
 
-
+    def make(self):
+        GigastepEnv(**self.get_kwargs())
 
     def get_kwargs(self):
         return {
@@ -59,7 +60,7 @@ def get_5v5_env():
     builder.add_sniper_type(1)
     builder.add_ranger_type(1)
 
-    return GigastepEnv(**builder.get_kwargs())
+    return builder.make()
 
 def get_3v3_env():
     builder = ScenarioBuilder()
@@ -72,7 +73,7 @@ def get_3v3_env():
     builder.add_sniper_type(1)
     builder.add_ranger_type(1)
 
-    return GigastepEnv(**builder.get_kwargs())
+    return builder.make()
 
 def get_1v5_env():
     builder = ScenarioBuilder()
@@ -84,4 +85,15 @@ def get_1v5_env():
     builder.add_default_type(1)
     builder.add_default_type(1)
 
-    return GigastepEnv(**builder.get_kwargs())
+    return builder.make()
+
+_builtin_scenarios = {
+    "5v5": get_5v5_env,
+    "3v3": get_3v3_env,
+    "1v5": get_1v5_env,
+}
+
+def get_scenario(name):
+    if name not in _builtin_scenarios.keys():
+        raise ValueError(f"Scenario {name} not found.")
+    return _builtin_scenarios[name]()

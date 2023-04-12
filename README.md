@@ -10,17 +10,12 @@ pip3 install gigastep
 
 ## Features
 
-Partial observability (stochastic observations and communication)  
-![Gigastep](misc/obs.gif)
+- Collaborative and adversarial multi-agent  
+- Partial observability (stochastic observations and communication)
+- Scalable (> 1000 agents, ```jax.jit``` and ```jax.vmap``` support)
+- Heterogeneous agent types  
 
-Collaborative and adversarial multi-agent  
-![Gigastep](misc/random.gif)
-
-Heteregeneous agent types  
-![Gigastep](misc/agenttypes.gif)
-
-Scalable (1000 vs 1000 agents)  
-![Gigastep](misc/1000vs1000.gif)
+![Gigastep](misc/concat.webp)
 
 ## Usage
 

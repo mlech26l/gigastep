@@ -29,7 +29,7 @@ def loop_env(env):
             img = viewer.draw(env, state, obs)
 
             img = img[0:2*img.shape[0]//3]
-            cv2.imwrite(f"video/scenario/frame_{frame_idx:05d}.png", img)
+            cv2.imwrite(f"video/scenario/frame_{frame_idx:04d}.png", img)
             if viewer.should_pause:
                 return
             if viewer.should_quit:

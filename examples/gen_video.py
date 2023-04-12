@@ -211,7 +211,7 @@ def loop_maps():
 def loop_heterogenous():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("3 agents, same thrust but different altitude")
-    dyn = GigastepEnv()
+    dyn = GigastepEnv(use_stochastic_obs=False,use_stochastic_comm=False,very_close_cone_depth=10)
     rng = jax.random.PRNGKey(1)
     frame = 0
     os.makedirs("video/hetero", exist_ok=True)
@@ -224,13 +224,28 @@ def loop_heterogenous():
             heading=np.pi/4,
             sprite=i
         )
-        state = stack_agents(s1)
-        action = jnp.zeros((1, 3))
+        s2 = GigastepEnv.get_initial_state(
+            x=7,
+            y=3,
+            team=0,
+            heading=np.pi/4,
+            sprite=i+3%8
+        )
+        s3 = GigastepEnv.get_initial_state(
+            x=3,
+            y=7,
+            team=1,
+            heading=np.pi/4,
+            sprite=i+5%8
+        )
+        state = stack_agents(s1, s2, s3)
+        action = jnp.zeros((3, 3))
         rng, key = jax.random.split(rng, 2)
         state, obs, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
-        save_frame(dyn, state, obs, f"video/hetero/frame_{frame:04d}.png", obs1=True)
-        frame += 1
+        for i in range(5):
+            save_frame(dyn, state, obs, f"video/hetero/frame_{frame:04d}.png", obs1=True)
+            frame += 1
 
 if __name__ == "__main__":
     # loop_2agents_altitude()
@@ -238,8 +253,8 @@ if __name__ == "__main__":
     # loop_visible_debug()
     # loop_random_agents()
     # loop_random_many_agents()
-    loop_maps()
-    # loop_heterogenous()
+    # loop_maps()
+    loop_heterogenous()
     # convert -delay 10 -loop 0 video/random/frame_*.png video/random.gif
     # convert -delay 10 -loop 0 video/2agents/frame_*.png video/2agents.gif
     # convert -delay 10 -loop 0 video/visibility/frame_*.png video/visibility.gif

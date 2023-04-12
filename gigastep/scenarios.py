@@ -23,13 +23,13 @@ class ScenarioBuilder:
     def add_sniper_type(self,team=0):
         self.add(team=team, sprite=3, max_health=1, range=2, thrust=1)
 
-    def add_ranger_type(self,team=0):
-        self.add(team=team, sprite=5, max_health=1, range=0, thrust=2)
+    def add_scout_type(self,team=0):
+        self.add(team=team, sprite=5, max_health=1, range=1, thrust=2)
 
     def add_default_type(self,team=0):
         self.add(team=team, sprite=1, max_health=1, range=1, thrust=1)
 
-    def add_special_type(self,team=0):
+    def add_boss_type(self,team=0):
         self.add(team=team, sprite=6, max_health=3, range=2, thrust=1.2)
 
     def make(self):
@@ -52,13 +52,13 @@ def get_5v5_env():
     builder.add_default_type(0)
     builder.add_tank_type(0)
     builder.add_sniper_type(0)
-    builder.add_ranger_type(0)
+    builder.add_scout_type(0)
 
     builder.add_default_type(1)
     builder.add_default_type(1)
     builder.add_tank_type(1)
     builder.add_sniper_type(1)
-    builder.add_ranger_type(1)
+    builder.add_scout_type(1)
 
     return builder.make()
 
@@ -67,17 +67,17 @@ def get_3v3_env():
     # 1 tank, 1 sniper, 1 ranger
     builder.add_tank_type(0)
     builder.add_sniper_type(0)
-    builder.add_ranger_type(0)
+    builder.add_scout_type(0)
 
     builder.add_tank_type(1)
     builder.add_sniper_type(1)
-    builder.add_ranger_type(1)
+    builder.add_scout_type(1)
 
     return builder.make()
 
 def get_1v5_env():
     builder = ScenarioBuilder()
-    builder.add_special_type(0)
+    builder.add_boss_type(0)
 
     builder.add_default_type(1)
     builder.add_default_type(1)

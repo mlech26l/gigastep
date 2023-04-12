@@ -115,6 +115,7 @@ class GigastepViewer:
         self._show_image(frame_buffer)
         self.poll()
         self.clock.tick(60)
+        return np.transpose(frame_buffer,[1,0,2])
 
     def _show_image(self, image):
         self.image = pygame.surfarray.make_surface(image)

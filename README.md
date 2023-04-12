@@ -34,10 +34,10 @@ state = dyn.reset(key_reset)
 while not ep_done:
     rng, key_action,key_step = jax.random.split(rng, 3)
     action = jax.random.uniform(key_action, shape=(n_agents, 3), minval=-1, maxval=1)
-    state, obs, rewards, alive, ep_done = dyn.step(state, action, key_step)
+    state, obs, rewards, dones, ep_done = dyn.step(state, action, key_step)
     # obs is an uint8 array of shape [n_agents, 84,84,3]
     # rewards is a float32 array of shape [n_agents]
-    # alive is a bool array of shape [n_agents]
+    # dones is a bool array of shape [n_agents]
     # ep_done is a bool
 ```
 
@@ -65,9 +65,9 @@ while not jnp.all(ep_dones):
     rng, key_action,key_step = jax.random.split(rng, 3)
     action = jax.random.uniform(key_action, shape=(batch_size, n_agents, 3), minval=-1, maxval=1)
     key_step = jax.random.split(key_step, batch_size)
-    state, obs, rewards, alive, ep_dones = dyn.v_step(state, action, key_step)
+    state, obs, rewards, dones, ep_dones = dyn.v_step(state, action, key_step)
     # obs is an uint8 array of shape [batch_size, n_agents, 84,84,3]
     # rewards is a float32 array of shape [batch_size, n_agents]
-    # alive is a bool array of shape [batch_size, n_agents]
+    # dones is a bool array of shape [batch_size, n_agents]
     # ep_done is a bool array of shape [batch_size]
 ```

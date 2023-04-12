@@ -371,8 +371,8 @@ class GigastepEnv:
         obs = v_get_observation(
             next_states, has_detected, seen, rng, jnp.arange(x.shape[0])
         )
-        alive = alive.astype(jnp.bool_)
-        return next_states, obs, reward, alive, episode_done
+        dones = (1-alive).astype(jnp.bool_)
+        return next_states, obs, reward, dones, episode_done
 
     def get_dones(self, states):
         return states[0]["alive"]

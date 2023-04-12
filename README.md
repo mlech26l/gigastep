@@ -1,7 +1,6 @@
 # Gigastep - 1 billion steps per second multi-agent RL
 
-![Gigastep](misc/maps.gif)  
-(Left: Global information, Right: What the first agent sees)
+![Gigastep](misc/banner.gif)  
 
 ## Installation
 

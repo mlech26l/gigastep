@@ -10,7 +10,7 @@ from gigastep import GigastepViewer
 SLEEP_TIME = 0.01
 
 def loop_throttle():
-    viewer = GigastepViewer(84 * 4,show_agent1=False)
+    viewer = GigastepViewer(84 * 4,show_num_agents=0)
     viewer.set_title("3 agents, same thrust but different altitude")
     dyn = GigastepEnv()
     rng = jax.random.PRNGKey(1)

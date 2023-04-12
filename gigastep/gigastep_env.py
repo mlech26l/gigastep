@@ -13,6 +13,10 @@ from gigastep.builtin_maps import get_builtin_maps, prerender_maps
 from gigastep.jax_utils import Discrete, Box
 
 
+# from flax import struct
+
+
+
 def stack_agents(*args):
     agents = jax.tree_map(lambda *xs: jnp.stack(xs, axis=0), *args)
     # map_state = {"boxes": jnp.zeros((0, 4), dtype=jnp.float32)}
@@ -94,13 +98,18 @@ class GigastepEnv:
         resolution_x=84,
         resolution_y=84,
         n_agents=10,
+        per_agent_sprites = None,
+        per_agent_thrust = None,
+        per_agent_max_health = None,
+        per_agent_range = None,
+        per_agent_team = None,
         tagged_penalty=5,
         discrete_actions=False,
         jit=True,
     ):
+        self.n_agents = n_agents
         self.very_close_cone_depth = jnp.square(very_close_cone_depth)
         self.cone_depth = jnp.square(cone_depth)
-        self.n_agents = n_agents
         self.cone_angle = cone_angle
         self.damage_per_second = damage_per_second
         self.healing_per_second = healing_per_second
@@ -111,6 +120,28 @@ class GigastepEnv:
         self.use_stochastic_obs = use_stochastic_obs
         self.use_stochastic_comm = use_stochastic_comm
         self.max_communication_range = 10
+
+        if per_agent_sprites is None:
+            per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)
+        self._per_agent_sprites = per_agent_sprites
+        if per_agent_thrust is None:
+            per_agent_thrust = jnp.ones(n_agents, dtype=jnp.float32)
+        self._per_agent_thrust = per_agent_thrust
+        if per_agent_max_health is None:
+            per_agent_max_health = jnp.ones(n_agents, dtype=jnp.float32)
+        self._per_agent_max_health = per_agent_max_health
+        if per_agent_range is None:
+            per_agent_range = jnp.ones(n_agents, dtype=jnp.float32)
+        self._per_agent_range = per_agent_range
+
+        if per_agent_team is None:
+            team_blue = self.n_agents // 2
+            team_red = self.n_agents - team_blue
+            per_agent_team = jnp.concatenate(
+                [jnp.ones((team_blue,)), jnp.zeros((team_red,))], axis=0
+            )
+        self._per_agent_team = per_agent_team
+
 
         self.limits = (limit_x, limit_y)
         self.z_min = 1
@@ -544,11 +575,6 @@ class GigastepEnv:
 
         health = jnp.ones((self.n_agents,), dtype=jnp.float32)
         alive = jnp.ones((self.n_agents,), dtype=jnp.bool_)
-        team_blue = self.n_agents // 2
-        team_red = self.n_agents - team_blue
-        teams = jnp.concatenate(
-            [jnp.ones((team_blue,)), jnp.zeros((team_red,))], axis=0
-        )
         agent_state = {
             "x": x,
             "y": y,
@@ -557,11 +583,11 @@ class GigastepEnv:
             "heading": heading,
             "health": health,
             "alive": alive,
-            "team": teams,
-            "detection_range": jnp.ones((self.n_agents,), dtype=jnp.float32),
-            "max_health": jnp.ones((self.n_agents,), dtype=jnp.float32),
-            "max_thrust": jnp.ones((self.n_agents,), dtype=jnp.float32),
-            "sprite": jnp.ones((self.n_agents,), dtype=jnp.int32),
+            "team": self._per_agent_team,
+            "detection_range": self._per_agent_range,
+            "max_health": self._per_agent_max_health,
+            "max_thrust": self._per_agent_thrust,
+            "sprite": self._per_agent_sprites,
         }
 
         state = (agent_state, map_state)

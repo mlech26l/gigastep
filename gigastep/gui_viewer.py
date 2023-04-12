@@ -1,3 +1,4 @@
+import math
 import sys
 import time
 
@@ -13,19 +14,24 @@ class GigastepViewer:
     def __init__(
         self,
         frame_size,
-        show_agent1=True,
+        show_num_agents=1,
     ):
         pygame.init()
         self.clock = pygame.time.Clock()
-        self.show_agent1 = show_agent1
+        self.show_num_agents = show_num_agents
         self.image = None
         self.frame_size = frame_size
         self.should_quit = False
         self.should_reset = False
         self._should_pause = False
-        frame = (
-            (frame_size * 2, frame_size) if show_agent1 else (frame_size, frame_size)
-        )
+        if show_num_agents <= 6:
+            self._num_cols = show_num_agents+1
+            self._num_rows = 1
+        else:
+            self._num_cols = 6
+            self._num_rows = math.ceil((show_num_agents+1) / self._num_cols)
+        frame = (frame_size * self._num_cols, frame_size * self._num_rows)
+
         if GigastepViewer.display is None:
             GigastepViewer.display = pygame.display.set_mode(frame)
 
@@ -75,6 +81,9 @@ class GigastepViewer:
         self.action = jnp.array(action)
 
     def draw(self, dyn, state, obs):
+        frame_buffer = np.zeros(( self.frame_size * self._num_cols, self.frame_size * self._num_rows,3), dtype=np.uint8)
+
+
         global_obs = dyn.get_global_observation(state)
         global_obs = np.array(global_obs, dtype=np.uint8)
         # obs = cv2.cvtColor(np.array(obs), cv2.COLOR_RGB2BGR)
@@ -83,10 +92,13 @@ class GigastepViewer:
             (self.frame_size, self.frame_size),
             interpolation=cv2.INTER_NEAREST,
         )
-        image = global_obs
+        frame_buffer[
+            0 : self.frame_size,
+            0 : self.frame_size,
+        ] = global_obs
 
-        if self.show_agent1:
-            obs_1 = obs[0]
+        for i in range(self.show_num_agents):
+            obs_1 = obs[i]
             obs_1 = np.array(obs_1, dtype=np.uint8)
             # obs_1 = cv2.cvtColor(np.array(obs_1), cv2.COLOR_RGB2BGR)
             obs_1 = cv2.resize(
@@ -94,8 +106,13 @@ class GigastepViewer:
                 (self.frame_size, self.frame_size),
                 interpolation=cv2.INTER_NEAREST,
             )
-            image = np.concatenate([image, obs_1], axis=0)
-        self._show_image(image)
+            row = (i+1) // self._num_cols
+            col = (i+1) % self._num_cols
+            frame_buffer[
+                col * self.frame_size : (col + 1) * self.frame_size,
+                row * self.frame_size : (row + 1) * self.frame_size,
+            ] = obs_1
+        self._show_image(frame_buffer)
         self.poll()
         self.clock.tick(60)
 

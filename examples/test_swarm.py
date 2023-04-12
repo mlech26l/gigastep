@@ -11,7 +11,7 @@ SLEEP_TIME = 0.01
 
 
 def loop_random_agents():
-    viewer = GigastepViewer(120 * 4,show_agent1=False)
+    viewer = GigastepViewer(120 * 4,show_num_agents=0)
     viewer.set_title("10 random agents")
     n_agents = 2000
     resolution = 160

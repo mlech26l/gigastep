@@ -12,6 +12,7 @@ pip3 install gigastep
 
 - Collaborative and adversarial multi-agent  
 - Partial observability (stochastic observations and communication)
+- 3D dynamics
 - Scalable (> 1000 agents, ```jax.jit``` and ```jax.vmap``` support)
 - Heterogeneous agent types  
 

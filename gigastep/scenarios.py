@@ -18,14 +18,14 @@ class ScenarioBuilder:
         self._per_agent_thrust.append(thrust)
 
     def add_type(self,team, agent_type):
-        if agent_type == "tank":
+        if agent_type == "default":
+            self.add(team=team, sprite=1, max_health=1, range=1, thrust=1)
+        elif agent_type == "tank":
             self.add(team=team, sprite=7, max_health=3, range=1, thrust=1)
         elif agent_type == "sniper":
             self.add(team=team, sprite=3, max_health=1, range=2, thrust=1)
         elif agent_type == "scout":
             self.add(team=team, sprite=5, max_health=1, range=1, thrust=2)
-        elif agent_type == "default":
-            self.add(team=team, sprite=1, max_health=1, range=1, thrust=1)
         elif agent_type=="boss":
             self.add(team=team, sprite=6, max_health=3, range=2, thrust=1.2)
         else:

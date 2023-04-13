@@ -76,8 +76,9 @@ while not jnp.all(ep_dones):
 
 ## 🎭 Scenarios (TODO: define scenarios)
 
-🚧 TODO: There should be a list of 10 to 20 built-in scenarios with different agent types and different
+- 🚧 TODO: There should be a list of 10 to 20 built-in scenarios with different agent types and different
 The number of agents should be between 2 and 1000
+- 🚧 TODO: The ScenarioBuilder should allow defining maps
 
 ### List of built-in scenarios
 
@@ -97,11 +98,11 @@ def custom_3v1_scenario():
     builder = ScenarioBuilder()
        
     # add two default type agents to team zero
-    builder.add_default_type(0)
-    builder.add_default_type(0)
+    builder.add_type(0, "default")
+    builder.add_type(0, "default")
     
     # add tank type agent to team zero
-    builder.add_tank_type(0)
+    builder.add_type(0, "tank")
     
     # add new agent type with increased health and range to team one 
     builder.add(1,sprite=5, max_health=2, range=2)

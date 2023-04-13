@@ -17,20 +17,19 @@ class ScenarioBuilder:
         self._per_agent_range.append(range)
         self._per_agent_thrust.append(thrust)
 
-    def add_tank_type(self,team=0):
-        self.add(team=team, sprite=7, max_health=3, range=1, thrust=1)
-
-    def add_sniper_type(self,team=0):
-        self.add(team=team, sprite=3, max_health=1, range=2, thrust=1)
-
-    def add_scout_type(self,team=0):
-        self.add(team=team, sprite=5, max_health=1, range=1, thrust=2)
-
-    def add_default_type(self,team=0):
-        self.add(team=team, sprite=1, max_health=1, range=1, thrust=1)
-
-    def add_boss_type(self,team=0):
-        self.add(team=team, sprite=6, max_health=3, range=2, thrust=1.2)
+    def add_type(self,team, agent_type):
+        if agent_type == "tank":
+            self.add(team=team, sprite=7, max_health=3, range=1, thrust=1)
+        elif agent_type == "sniper":
+            self.add(team=team, sprite=3, max_health=1, range=2, thrust=1)
+        elif agent_type == "scout":
+            self.add(team=team, sprite=5, max_health=1, range=1, thrust=2)
+        elif agent_type == "default":
+            self.add(team=team, sprite=1, max_health=1, range=1, thrust=1)
+        elif agent_type=="boss":
+            self.add(team=team, sprite=6, max_health=3, range=2, thrust=1.2)
+        else:
+            raise ValueError(f"Unknown agent type {agent_type}")
 
     def make(self):
         GigastepEnv(**self.get_kwargs())
@@ -45,55 +44,31 @@ class ScenarioBuilder:
             "per_agent_thrust": jnp.array(self._per_agent_thrust),
         }
 
-def get_5v5_env():
-    builder = ScenarioBuilder()
-    # 2 default, 1 tank, 1 sniper, 1 ranger
-    builder.add_default_type(0)
-    builder.add_default_type(0)
-    builder.add_tank_type(0)
-    builder.add_sniper_type(0)
-    builder.add_scout_type(0)
-
-    builder.add_default_type(1)
-    builder.add_default_type(1)
-    builder.add_tank_type(1)
-    builder.add_sniper_type(1)
-    builder.add_scout_type(1)
-
-    return builder.make()
-
-def get_3v3_env():
-    builder = ScenarioBuilder()
-    # 1 tank, 1 sniper, 1 ranger
-    builder.add_tank_type(0)
-    builder.add_sniper_type(0)
-    builder.add_scout_type(0)
-
-    builder.add_tank_type(1)
-    builder.add_sniper_type(1)
-    builder.add_scout_type(1)
-
-    return builder.make()
-
-def get_1v5_env():
-    builder = ScenarioBuilder()
-    builder.add_boss_type(0)
-
-    builder.add_default_type(1)
-    builder.add_default_type(1)
-    builder.add_default_type(1)
-    builder.add_default_type(1)
-    builder.add_default_type(1)
-
-    return builder.make()
+    @classmethod
+    def from_config(cls, config):
+        builder = cls()
+        for agents in config["team_0"]:
+            for k,v in agents.items():
+                for _ in range(v):
+                    builder.add_type(0, k)
+        for agents in config["team_1"]:
+            for k,v in agents.items():
+                for _ in range(v):
+                    builder.add_type(1, k)
+        return builder
 
 _builtin_scenarios = {
-    "5v5": get_5v5_env,
-    "3v3": get_3v3_env,
-    "1v5": get_1v5_env,
+    "20_vs_20": {
+        "team_0": {"default":20},
+        "team_1": {"default":20},
+    },
 }
 
 def get_scenario(name):
     if name not in _builtin_scenarios.keys():
         raise ValueError(f"Scenario {name} not found.")
+
+    scenario = _builtin_scenarios[name]
+    if isinstance(scenario, dict):
+        return ScenarioBuilder.from_config(scenario).make()
     return _builtin_scenarios[name]()

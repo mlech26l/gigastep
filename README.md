@@ -23,20 +23,19 @@ To install JAX with GPU support see [JAX installation instructions](https://gith
 ## 🎓 Usage
 
 ```python
-from gigastep import GigastepEnv
+from gigastep import make_scenario
 import jax
 
-n_agents = 20
-dyn = GigastepEnv(n_agents=n_agents)
+env = make_scenario("identical_20_vs_20")
 rng = jax.random.PRNGKey(3)
 rng, key_reset = jax.random.split(rng, 2)
 
 ep_done = False
-state = dyn.reset(key_reset)
+state, obs = env.reset(key_reset)
 while not ep_done:
     rng, key_action,key_step = jax.random.split(rng, 3)
-    action = jax.random.uniform(key_action, shape=(n_agents, 3), minval=-1, maxval=1)
-    state, obs, rewards, dones, ep_done = dyn.step(state, action, key_step)
+    action = jax.random.uniform(key_action, shape=(env.n_agents, 3), minval=-1, maxval=1)
+    state, obs, rewards, dones, ep_done = env.step(state, action, key_step)
     # obs is an uint8 array of shape [n_agents, 84,84,3]
     # rewards is a float32 array of shape [n_agents]
     # dones is a bool array of shape [n_agents]
@@ -50,24 +49,23 @@ The ```eng.reset``` and ```eng.step``` functions are vectorized using ```jax.vma
 accessible through the ```eng.v_reset``` and ```eng.v_step``` methods.
 
 ```python
-from gigastep import GigastepEnv
+from gigastep import make_scenario
 import jax
 import jax.numpy as jnp
 
-n_agents = 20
 batch_size = 32
-dyn = GigastepEnv(n_agents=n_agents)
+env = make_scenario("identical_20_vs_20")
 rng = jax.random.PRNGKey(3)
 rng, key_reset = jax.random.split(rng, 2)
 key_reset = jax.random.split(key_reset, batch_size)
 
-state = dyn.v_reset(key_reset)
+state, obs = env.v_reset(key_reset)
 ep_dones = jnp.zeros(batch_size, dtype=jnp.bool_)
 while not jnp.all(ep_dones):
     rng, key_action,key_step = jax.random.split(rng, 3)
-    action = jax.random.uniform(key_action, shape=(batch_size, n_agents, 3), minval=-1, maxval=1)
+    action = jax.random.uniform(key_action, shape=(batch_size, env.n_agents, 3), minval=-1, maxval=1)
     key_step = jax.random.split(key_step, batch_size)
-    state, obs, rewards, dones, ep_dones = dyn.v_step(state, action, key_step)
+    state, obs, rewards, dones, ep_dones = env.v_step(state, action, key_step)
     # obs is an uint8 array of shape [batch_size, n_agents, 84,84,3]
     # rewards is a float32 array of shape [batch_size, n_agents]
     # dones is a bool array of shape [batch_size, n_agents]
@@ -82,11 +80,21 @@ The number of agents should be between 2 and 1000
 
 ### List of built-in scenarios
 
-| Scenario         | Description                           |
-|------------------|---------------------------------------|
-| ```3v3```        | 3v3 scenario with default agent types |
-| ```5v5```        | 3v1 scenario with default agent types |
-| ```3v1```        | 3v1 scenario with                     |
+| Scenario                 | Description                                                |
+|--------------------------|------------------------------------------------------------|
+| ```identical_20_vs_20``` | 20 default units per team                                  |
+| ```identical_10_vs_10``` | 10 default units per team                                  |
+| ```identical_5_vs_5```   | 5 default units per team                                   |
+| ```special_20_vs_20```   | 5 tank, 5 sniper, 5 scout, 5 default units per team        |
+| ```special_10_vs_10```   | 3 tank, 3 sniper, 3 scout, 1 default units per team        |
+| ```special_5_vs_5```     | 1 tank, 1 sniper, 1 scout, 2 default units per team        |
+| **Asymmetric teams**     |                                                            |
+| ```identical_20_vs_5```  | 20 default units vs 5 boss units                           |
+| ```identical_10_vs_3```  | 10 default units vs 3 boss units                           |
+| ```identical_5_vs_1```   | 5 default units vs 1 boss unit                             |
+| ```special_20_vs_5```    | 5 tank, 5 sniper, 5 scout, 5 default units vs 5 boss units |
+| ```special_10_vs_3```    | 3 tank, 3 sniper, 3 scout, 1 default units vs 3 boss units |
+| ```special_5_vs_1```     | 1 tank, 1 sniper, 1 scout, 2 default units vs 1 boss unit  |
 
 
 ### Custom Scenario

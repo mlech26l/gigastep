@@ -6,7 +6,8 @@ import cv2
 import jax
 import numpy as np
 import jax.numpy as jnp
-import pygame
+import importlib
+
 
 class GigastepViewer:
     display = None
@@ -16,8 +17,11 @@ class GigastepViewer:
         frame_size,
         show_num_agents=1,
     ):
-        pygame.init()
-        self.clock = pygame.time.Clock()
+        # only import pygame if the viewer is used
+        self.pygame = importlib.import_module("pygame")
+
+        self.pygame.init()
+        self.clock = self.pygame.time.Clock()
         self.show_num_agents = show_num_agents
         self.image = None
         self.frame_size = frame_size
@@ -25,15 +29,15 @@ class GigastepViewer:
         self.should_reset = False
         self._should_pause = False
         if show_num_agents <= 6:
-            self._num_cols = show_num_agents+1
+            self._num_cols = show_num_agents + 1
             self._num_rows = 1
         else:
             self._num_cols = 6
-            self._num_rows = math.ceil((show_num_agents+1) / self._num_cols)
+            self._num_rows = math.ceil((show_num_agents + 1) / self._num_cols)
         frame = (frame_size * self._num_cols, frame_size * self._num_rows)
 
         if GigastepViewer.display is None:
-            GigastepViewer.display = pygame.display.set_mode(frame)
+            GigastepViewer.display = self.pygame.display.set_mode(frame)
 
         self.action = jnp.array([0, 0, 0])
 
@@ -44,45 +48,52 @@ class GigastepViewer:
         return p
 
     def poll(self):
-        pygame.event.pump()
-        keys = pygame.key.get_pressed()
+        self.pygame.event.pump()
+        keys = self.pygame.key.get_pressed()
 
         self.should_reset = False
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+        for event in self.pygame.event.get():
+            if event.type == self.pygame.KEYDOWN and event.key == self.pygame.K_ESCAPE:
                 self.should_quit = True
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            elif (
+                event.type == self.pygame.KEYDOWN and event.key == self.pygame.K_RETURN
+            ):
                 self._should_pause = True
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE:
+            elif (
+                event.type == self.pygame.KEYDOWN
+                and event.key == self.pygame.K_BACKSPACE
+            ):
                 self.should_reset = True
 
         action = [0, 0, 0]
-        if keys[pygame.K_a]:
+        if keys[self.pygame.K_a]:
             action[0] = -1
-        elif keys[pygame.K_d]:
+        elif keys[self.pygame.K_d]:
             action[0] = 1
-        if keys[pygame.K_w]:
+        if keys[self.pygame.K_w]:
             action[2] = 1
-        elif keys[pygame.K_s]:
+        elif keys[self.pygame.K_s]:
             action[2] = -1
-        if keys[pygame.K_SPACE]:
+        if keys[self.pygame.K_SPACE]:
             action[1] = 1
-        elif keys[pygame.K_LSHIFT]:
+        elif keys[self.pygame.K_LSHIFT]:
             action[1] = -1
-        if keys[pygame.K_UP]:
+        if keys[self.pygame.K_UP]:
             action[2] = 1
-        elif keys[pygame.K_DOWN]:
+        elif keys[self.pygame.K_DOWN]:
             action[2] = -1
-        if keys[pygame.K_LEFT]:
+        if keys[self.pygame.K_LEFT]:
             action[0] = -1
-        elif keys[pygame.K_RIGHT]:
+        elif keys[self.pygame.K_RIGHT]:
             action[0] = 1
 
         self.action = jnp.array(action)
 
     def draw(self, dyn, state, obs):
-        frame_buffer = np.zeros(( self.frame_size * self._num_cols, self.frame_size * self._num_rows,3), dtype=np.uint8)
-
+        frame_buffer = np.zeros(
+            (self.frame_size * self._num_cols, self.frame_size * self._num_rows, 3),
+            dtype=np.uint8,
+        )
 
         global_obs = dyn.get_global_observation(state)
         global_obs = np.array(global_obs, dtype=np.uint8)
@@ -106,8 +117,8 @@ class GigastepViewer:
                 (self.frame_size, self.frame_size),
                 interpolation=cv2.INTER_NEAREST,
             )
-            row = (i+1) // self._num_cols
-            col = (i+1) % self._num_cols
+            row = (i + 1) // self._num_cols
+            col = (i + 1) % self._num_cols
             frame_buffer[
                 col * self.frame_size : (col + 1) * self.frame_size,
                 row * self.frame_size : (row + 1) * self.frame_size,
@@ -116,15 +127,15 @@ class GigastepViewer:
         self.poll()
         self.clock.tick(60)
         frame_buffer = cv2.cvtColor(frame_buffer, cv2.COLOR_RGB2BGR)
-        return np.transpose(frame_buffer,[1,0,2])
+        return np.transpose(frame_buffer, [1, 0, 2])
 
     def _show_image(self, image):
-        self.image = pygame.surfarray.make_surface(image)
+        self.image = self.pygame.surfarray.make_surface(image)
         GigastepViewer.display.blit(self.image, (0, 0))
-        pygame.display.update()
+        self.pygame.display.update()
 
     def set_title(self, title):
-        pygame.display.set_caption(title)
+        self.pygame.display.set_caption(title)
 
     # def start(self):
     #     running = True

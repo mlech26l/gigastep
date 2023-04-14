@@ -3,29 +3,21 @@ from functools import partial
 
 import jax.numpy as jnp
 import jax
-import cv2
 
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 from gigastep.builtin_maps import get_builtin_maps, prerender_maps
 from gigastep.jax_utils import Discrete, Box
 
 
-# from flax import struct
-
-
-
 def stack_agents(*args):
+    """Stack agents along the first axis."""
     agents = jax.tree_map(lambda *xs: jnp.stack(xs, axis=0), *args)
-    # map_state = {"boxes": jnp.zeros((0, 4), dtype=jnp.float32)}
     map_state = {"map_idx": jnp.int32(0)}
-    # map_state = {"boxes": jnp.array([[4, 8.5, 6, 9]])}
     return (agents, map_state)
 
 
 def draw_all_agents(obs, x, y, z, teams, alive, sprite):
+    """Used for the global observation"""
     team1 = (teams == 1) * 255 * alive
     team2 = (teams == 0) * 255 * alive
     r = team1
@@ -50,6 +42,7 @@ def draw_all_agents(obs, x, y, z, teams, alive, sprite):
 
 
 def draw_agents_from_ego(obs, x, y, z, teams, seen, agent_id, sprite):
+    """Draws the agents from the perspective of the agent with id agent_id."""
     team1 = (teams != teams[agent_id]) * 255 * seen
     team2 = (teams == teams[agent_id]) * 255 * seen
     seen_or_same_team = (seen > 0) | (teams == teams[agent_id])
@@ -93,16 +86,17 @@ class GigastepEnv:
         collision_range=0.4,
         collision_altitude=0.5,
         collision_penalty=10,
-        limit_x = 10,
-        limit_y = 10,
+        limit_x=10,
+        limit_y=10,
         resolution_x=84,
         resolution_y=84,
         n_agents=10,
-        per_agent_sprites = None,
-        per_agent_thrust = None,
-        per_agent_max_health = None,
-        per_agent_range = None,
-        per_agent_team = None,
+        maps="all",
+        per_agent_sprites=None,
+        per_agent_thrust=None,
+        per_agent_max_health=None,
+        per_agent_range=None,
+        per_agent_team=None,
         tagged_penalty=5,
         discrete_actions=False,
         jit=True,
@@ -142,12 +136,12 @@ class GigastepEnv:
             )
         self._per_agent_team = per_agent_team
 
-
         self.limits = (limit_x, limit_y)
         self.z_min = 1
         self.z_max = 10
         self.resolution = (resolution_x, resolution_y)
         self.time_delta = 0.1
+
         self.observation_space = Box(
             low=jnp.zeros([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8),
             high=255
@@ -155,6 +149,7 @@ class GigastepEnv:
         )
         self.discrete_actions = discrete_actions
         if self.discrete_actions:
+            # 3x3x3 = 27 actions {+1, 0, -1}^3
             self.action_space = Discrete(3**3)
             self.action_lut = jnp.array(
                 jnp.meshgrid([-1, 0, 1], [-1, 0, 1], [-1, 0, 1])
@@ -162,7 +157,8 @@ class GigastepEnv:
         else:
             self.action_space = Box(low=-jnp.ones(3), high=jnp.ones(3))
 
-        self._maps = get_builtin_maps(self.limits)
+        self._maps = get_builtin_maps(maps, self.limits)
+        # maps need to be prerendered because range indexing is not supported in jax.jit
         self._prerendered_maps = prerender_maps(
             self._maps, self.resolution, self.limits
         )
@@ -215,9 +211,10 @@ class GigastepEnv:
 
         z_delta = state["z"] - z
         v_new = jnp.sqrt(
-            jnp.maximum(jnp.square(v) + c_dive_throttle * g * z_delta, jnp.square(v_min))
+            jnp.maximum(
+                jnp.square(v) + c_dive_throttle * g * z_delta, jnp.square(v_min)
+            )
         )  # 0 at minimum
-        # next_state = jnp.array([x, y, z, v_new, heading, health, seen, alive, team])
         next_state = {
             "x": x,
             "y": y,
@@ -225,7 +222,6 @@ class GigastepEnv:
             "v": v_new,
             "heading": heading,
             "health": state["health"],
-            # "seen": state["seen"],
             "alive": alive,
             "team": state["team"],
             "detection_range": state["detection_range"],
@@ -345,9 +341,6 @@ class GigastepEnv:
         # Check if agents are dead
         alive = alive * (health > 0)
 
-        # agent_states = jnp.stack(
-        #     [x, y, z, v, heading, health, seen, alive, teams], axis=1
-        # )
         agent_states = {
             "x": x,
             "y": y,
@@ -355,7 +348,6 @@ class GigastepEnv:
             "v": agent_states["v"],
             "heading": agent_states["heading"],
             "health": health,
-            # "seen": seen,
             "alive": alive,
             "team": teams,
             "max_thrust": agent_states["max_thrust"],
@@ -371,22 +363,20 @@ class GigastepEnv:
         obs = v_get_observation(
             next_states, has_detected, seen, rng, jnp.arange(x.shape[0])
         )
-        dones = (1-alive).astype(jnp.bool_)
+        dones = (1 - alive).astype(jnp.bool_)
         return next_states, obs, reward, dones, episode_done
 
-    def get_dones(self, states):
-        return states[0]["alive"]
+    # def get_dones(self, states):
+    #     return states[0]["alive"]
 
     @partial(jax.jit, static_argnums=(0,))
     def get_observation(self, states, has_detected, took_damage, rng, agent_id):
-        # x, y, z, v, heading, health, seen, alive, teams = states.T
         agent_states, map_state = states
         x = agent_states["x"]
         y = agent_states["y"]
         z = agent_states["z"]
         alive = agent_states["alive"]
         teams = agent_states["team"]
-        # seen = agent_states["seen"]
         heading = agent_states["heading"]
 
         if self.use_stochastic_comm:
@@ -397,35 +387,28 @@ class GigastepEnv:
             distance = distance / self.max_communication_range
             distance = jnp.clip(distance, 0, 1)
             # Dead agents are out of communication range
-            # print("distance1.shape", distance.shape)
             distance = (
                 distance
                 + (1 - alive[None, :]) * 2
                 + (teams[agent_id] != teams[None, :])
             )
-            # print("distance2.shape", distance.shape)
             rand = jax.random.uniform(rng, shape=distance.shape)
             communicate = distance < rand
-            # print("communicate.shape", communicate.shape)
 
             seen = (has_detected + jnp.eye(has_detected.shape[0])) * communicate
         else:
             seen = has_detected + jnp.eye(has_detected.shape[0]) * (
                 teams[agent_id] == teams[None, :]
             )
-        # print("seen.shape", seen.shape)
         seen = jnp.sum(seen, axis=1) > 0
-        # BUG: in debug scenario, ego is not alive -> seen is always 0
-        # breakpoint()
 
         x = jnp.round(x * self.resolution[0] / self.limits[0]).astype(jnp.int32)
         y = jnp.round(y * self.resolution[1] / self.limits[1]).astype(jnp.int32)
         z = jnp.round((z - self.z_min) * 255 / (self.z_max - self.z_min)).astype(
             jnp.uint8
         )
-        alive = alive.astype(jnp.uint8)
+        # alive = alive.astype(jnp.uint8)
         teams = teams.astype(jnp.uint8)
-        # obs = jnp.zeros([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8)
         obs = self._prerendered_maps[map_state["map_idx"]]
 
         # Border is red
@@ -481,7 +464,6 @@ class GigastepEnv:
         )
         alive = alive.astype(jnp.uint8)
         teams = teams.astype(jnp.uint8)
-        # obs = jnp.zeros([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8)
         obs = self._prerendered_maps[map_state["map_idx"]]
 
         # Draw border
@@ -490,13 +472,8 @@ class GigastepEnv:
         obs = obs.at[0, :, :].max(255)
         obs = obs.at[self.resolution[0] - 1, :, :].max(255)
 
-        # Draw boxes
-        # obs = draw_boxes(obs, map_state["boxes"], self.resolution, self.limits)
-
-        # Draw agents
         team1 = teams
         team2 = 1 - teams
-        # Draw other agents
 
         tail_length = 5
         for i in range(1, tail_length):
@@ -513,9 +490,7 @@ class GigastepEnv:
     def reset(self, rng):
         rng = jax.random.split(rng, 7)
 
-        map_idx = jax.random.randint(
-            rng[5], shape=(), minval=0, maxval=len(self._maps)
-        )
+        map_idx = jax.random.randint(rng[5], shape=(), minval=0, maxval=len(self._maps))
         map_state = {
             "map_idx": map_idx,
         }
@@ -533,6 +508,8 @@ class GigastepEnv:
         heading = jax.random.uniform(
             rng[4], shape=(self.n_agents,), minval=0, maxval=2 * jnp.pi
         )
+        # To avoid collisions in the reset step, we resample agents that are too close to each other or to boxes
+        # up to 3 times
         for i in range(3):
             # slightly enlarge collision radius to avoid collisions in the first steps
             collision_enlarge = 0.1
@@ -597,7 +574,11 @@ class GigastepEnv:
         )
         rng = jax.random.split(rng[-1], x.shape[0])
         obs = v_get_observation(
-            state, jnp.zeros((self.n_agents,self.n_agents)), jnp.zeros(self.n_agents), rng, jnp.arange(x.shape[0])
+            state,
+            jnp.zeros((self.n_agents, self.n_agents)),
+            jnp.zeros(self.n_agents),
+            rng,
+            jnp.arange(x.shape[0]),
         )
 
         return state, obs

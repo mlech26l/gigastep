@@ -107,17 +107,25 @@ def _onp_draw_boxes(obs, boxes, resolution, limits):
     return obs
 
 
-def get_builtin_maps(limits):
+def get_builtin_maps(maps, limits):
     # Make sure all maps have the same size (for vmap)
-    max_map_size = max([m.shape[0] for m in _builtin_maps.values()])
+
+    if maps == "all":
+        list_of_maps = _builtin_maps
+    elif maps == "empty":
+        list_of_maps = {"empty": jnp.zeros((0, 4), dtype=jnp.float32)}
+    else:
+        raise ValueError(f"Unknown map name {maps}")
+
+    max_map_size = max([m.shape[0] for m in list_of_maps.values()])
     maps = []
-    for k, v in _builtin_maps.items():
+    for k, v in list_of_maps.items():
         maps.append(jnp.pad(v, ((0, max_map_size - v.shape[0]), (0, 0))))
 
     list_of_maps = jnp.stack(maps, axis=0)
 
     # maps are defined in [0,10]x[0,10] but we want to render them in [0,limits[0]]x[0,limits[1]]
-    normalizer = jnp.array([[10, 10,10,10]])
+    normalizer = jnp.array([[10, 10, 10, 10]])
     de_normalizer = jnp.array([[limits[0], limits[1], limits[0], limits[1]]])
     list_of_maps = list_of_maps / normalizer
     list_of_maps = list_of_maps * de_normalizer

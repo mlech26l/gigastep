@@ -1,0 +1,8 @@
+env: gigastep
+
+env_args:
+  map_name: "identical_5_vs_5"
+
+mask_flag: False
+global_state_flag: False
+opp_action_in_cc: True

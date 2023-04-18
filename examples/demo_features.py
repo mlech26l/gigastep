@@ -9,6 +9,7 @@ from gigastep import GigastepViewer
 
 SLEEP_TIME = 0.01
 
+
 def loop_2agents_altitude():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("3 agents, same thrust but different altitude")
@@ -129,6 +130,7 @@ def loop_random_agents():
                 sys.exit(1)
             time.sleep(SLEEP_TIME)
 
+
 def loop_reset_states():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("10 random agents")
@@ -154,8 +156,11 @@ def loop_visible_debug():
         collision_range=0.0, use_stochastic_obs=True, damage_per_second=0
     )  # disable collision
     rng = jax.random.PRNGKey(3)
+    t = 0
     while True:
-        state = [GigastepEnv.get_initial_state(y=5, x=5, v=0, team=0)]
+        rot = jnp.fmod(t * 0.4 + jnp.pi / 2, 2 * jnp.pi)
+        print(f"Heading {rot * 180 / jnp.pi:0.1f} degree")
+        state = [GigastepEnv.get_initial_state(y=5, x=5, v=0, team=0, heading=rot)]
         for i in range(40):
             for j in range(19):
                 state.append(
@@ -175,6 +180,7 @@ def loop_visible_debug():
         if viewer.should_quit:
             sys.exit(1)
         time.sleep(SLEEP_TIME)
+        t += 1
 
 
 def loop_agent_sprites():
@@ -255,14 +261,14 @@ def loop_agent_sprites():
 
 
 def loop_collision_with_offset():
-    viewer = GigastepViewer(84 * 4)
+    viewer = GigastepViewer(84 * 4, show_num_agents=2)
     viewer.set_title("Agents colliding or not depending on distance")
-    dyn = GigastepEnv()
+    dyn = GigastepEnv(use_stochastic_obs=False)
     rng = jax.random.PRNGKey(3)
     while True:
         s1 = GigastepEnv.get_initial_state(y=2, team=1)
         s2 = GigastepEnv.get_initial_state(
-            y=2.1, x=dyn.limits[0], heading=jnp.pi, team=0
+            y=2.1, x=dyn.limits[0], heading=jnp.pi, team=0, detection_range=100
         )
         s3 = GigastepEnv.get_initial_state(y=4, team=1)
         s4 = GigastepEnv.get_initial_state(
@@ -296,7 +302,8 @@ def loop_collision_with_offset():
             if viewer.should_quit:
                 sys.exit(1)
             t += 1
-            time.sleep(SLEEP_TIME)
+            # time.sleep(SLEEP_TIME)
+            time.sleep(0.1)
 
 
 def loop_maps():
@@ -326,6 +333,35 @@ def loop_maps():
                 break
 
 
+def loop_heading():
+    viewer = GigastepViewer(84 * 4, show_num_agents=2)
+    viewer.set_title("Agents colliding or not depending on distance")
+    dyn = GigastepEnv(use_stochastic_obs=False)
+    rng = jax.random.PRNGKey(3)
+    while True:
+        s1 = GigastepEnv.get_initial_state(y=2, team=1)
+        s2 = GigastepEnv.get_initial_state(
+            y=5.1, x=0, heading=jnp.pi / 4, team=0, detection_range=1
+        )
+        state = stack_agents(s1, s2)
+        t = 0
+        while jnp.sum(dyn.get_dones(state)) > 0:
+            a1 = GigastepEnv.action(speed=1)
+            a2 = GigastepEnv.action(speed=1)
+            action = jnp.stack([a1, a2], axis=0)
+            rng, key = jax.random.split(rng, 2)
+            state, obs, r, a, d = dyn.step(state, action, key)
+            print("Health", state[0]["health"])
+            viewer.draw(dyn, state, obs)
+            if viewer.should_pause:
+                return
+            if viewer.should_quit:
+                sys.exit(1)
+            t += 1
+            # time.sleep(SLEEP_TIME)
+            time.sleep(0.1)
+
+
 def loop_communication():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("10 random agents")
@@ -353,13 +389,14 @@ def loop_communication():
 
 
 if __name__ == "__main__":
+    loop_collision_with_offset()
+    loop_collide_direct()
+    loop_2agents_altitude()
     loop_visible_debug()
+    loop_heading()
     loop_reset_states()
     loop_random_agents()
     loop_communication()
     loop_maps()
     loop_agent_sprites()
     loop_speed_up_slow_down()
-    loop_collision_with_offset()
-    loop_collide_direct()
-    loop_2agents_altitude()

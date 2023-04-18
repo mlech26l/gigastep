@@ -45,8 +45,8 @@ while not ep_done:
 
 ## 🚀 Vectorized Environment 
 
-The ```eng.reset``` and ```eng.step``` functions are vectorized using ```jax.vmap``` and 
-accessible through the ```eng.v_reset``` and ```eng.v_step``` methods.
+The ```env.reset``` and ```env.step``` functions are vectorized using ```jax.vmap``` and 
+accessible through the ```env.v_reset``` and ```env.v_step``` methods.
 
 ```python
 from gigastep import make_scenario

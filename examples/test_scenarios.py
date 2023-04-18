@@ -5,8 +5,7 @@ import time
 import cv2
 import jax
 
-from gigastep import GigastepViewer, GigastepEnv
-from gigastep.scenarios import get_5v5_env, get_3v3_env, get_1v5_env, ScenarioBuilder
+from gigastep import GigastepViewer, GigastepEnv, make_scenario, ScenarioBuilder
 
 SLEEP_TIME = 0.01
 
@@ -29,7 +28,7 @@ def loop_env(env):
             img = viewer.draw(env, state, obs)
 
             img = img[0:2*img.shape[0]//3]
-            cv2.imwrite(f"video/scenario/frame_{frame_idx:04d}.png", img)
+            # cv2.imwrite(f"video/scenario/frame_{frame_idx:04d}.png", img)
             if viewer.should_pause:
                 return
             if viewer.should_quit:
@@ -40,34 +39,9 @@ def loop_env(env):
         if frame_idx>400:
             sys.exit(1)
 
-def get_custom_scenario():
-    builder = ScenarioBuilder()
-    # 2 default, 1 tank, 1 sniper, 1 ranger
-    builder.add_default_type(0)
-    builder.add_default_type(0)
-    builder.add_tank_type(0)
-    builder.add_sniper_type(0)
-    builder.add_ranger_type(0)
-
-    builder.add_default_type(1)
-    builder.add_default_type(1)
-    builder.add_tank_type(1)
-    builder.add_sniper_type(1)
-    builder.add_ranger_type(1)
-    builder.add_default_type(0)
-    builder.add_default_type(0)
-    builder.add_tank_type(0)
-    builder.add_sniper_type(0)
-    builder.add_ranger_type(0)
-
-    builder.add_default_type(1)
-    builder.add_default_type(1)
-
-    return GigastepEnv(**builder.get_kwargs())
-
 if __name__ == "__main__":
+
     # convert -delay 3 -loop 0 video/scenario/frame_*.png video/scenario.webp
-    loop_env(env = get_custom_scenario())
-    loop_env(env = get_5v5_env())
-    loop_env(env = get_3v3_env())
-    loop_env(env = get_1v5_env())
+    loop_env(env = make_scenario("identical_20_vs_20"))
+    # loop_env(env = make_scenario("identical_20_vs_20"))
+    # loop_env(env = make_scenario("identical_20_vs_20"))

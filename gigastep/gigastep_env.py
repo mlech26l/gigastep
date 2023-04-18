@@ -191,7 +191,7 @@ class GigastepEnv:
         # Change heading and pitch based on action
         heading = state["heading"] + self.time_delta * u_heading * c_heading * alive
         # keep within pi
-        heading = jnp.fmod(heading, 2 * jnp.pi)
+        heading = jnp.fmod(heading + jnp.pi, 2 * jnp.pi) - jnp.pi
 
         # Apply throttle
         v = (
@@ -285,14 +285,16 @@ class GigastepEnv:
         # Agents in cone are detected with probability inversely proportional to distance
         closness_score = (
             jnp.square(x[:, None] - x[None, :]) + jnp.square(y[:, None] - y[None, :])
-        ) / (self.cone_depth * agent_states["detection_range"][:, None])
-        angles = jnp.arctan2(y[:, None] - y[None, :], x[:, None] - x[None, :])
+        ) / (self.cone_depth * agent_states["detection_range"][None, :])
+        angles2 = jnp.arctan2(y[:, None] - y[None, :], x[:, None] - x[None, :])
         angles = (
-            jnp.fmod(angles - agent_states["heading"][:, None] + jnp.pi, 2 * jnp.pi)
+            jnp.fmod(
+                angles2 - agent_states["heading"][None, :] + jnp.pi + 2 * jnp.pi,
+                2 * jnp.pi,
+            )
             - jnp.pi
         )
         in_cone = jnp.abs(angles) < self.cone_angle
-
         if self.use_stochastic_obs:
             # if not in cone, set closness_score to 1.1 so that it is always greater than rand
             in_cone_score = jnp.clip(closness_score, 0, 1) + (1 - in_cone) * 1.1
@@ -319,7 +321,7 @@ class GigastepEnv:
             agent_states["health"]
             - seen * self.damage_per_second * self.time_delta
             + self.healing_per_second * self.time_delta
-        )
+        ) * alive
         health = jnp.clip(
             health, 0, agent_states["max_health"]
         )  # max health is agent dependent
@@ -366,8 +368,8 @@ class GigastepEnv:
         dones = (1 - alive).astype(jnp.bool_)
         return next_states, obs, reward, dones, episode_done
 
-    # def get_dones(self, states):
-    #     return states[0]["alive"]
+    def get_dones(self, states):
+        return states[0]["alive"]
 
     @partial(jax.jit, static_argnums=(0,))
     def get_observation(self, states, has_detected, took_damage, rng, agent_id):
@@ -413,15 +415,25 @@ class GigastepEnv:
 
         # Border is red
         obs = obs.at[:, 0, 0].max(255)
-        obs = obs.at[:, self.resolution[1] - 1, 0].max(255)
         obs = obs.at[0, :, 0].max(255)
         obs = obs.at[self.resolution[0] - 1, :, 0].max(255)
         # Border is white if agent is not taken damage
         not_taken_damage = (1 - took_damage[agent_id]).astype(jnp.uint8)
         obs = obs.at[:, 0, :].max(255 * not_taken_damage)
-        obs = obs.at[:, self.resolution[1] - 1, :].max(255 * not_taken_damage)
         obs = obs.at[0, :, :].max(255 * not_taken_damage)
         obs = obs.at[self.resolution[0] - 1, :, :].max(255 * not_taken_damage)
+
+        # Health bar is green
+        obs = obs.at[:, self.resolution[1] - 1, 1].max(255)
+        health_cutoff = jnp.int32(
+            self.resolution[1]
+            * agent_states["health"][agent_id]
+            / agent_states["max_health"][agent_id]
+        )
+        rb_channel = jnp.where(jnp.arange(self.resolution[1]) < health_cutoff, 0, 255)
+        obs = obs.at[:, self.resolution[1] - 1, 0].set(rb_channel)
+        obs = obs.at[:, self.resolution[1] - 1, 2].set(rb_channel)
+        # obs = obs.at[:, self.resolution[1] - 1, 0].max(255)
 
         tail_length = 5
         own_team = (teams == teams[agent_id]).astype(jnp.uint8)

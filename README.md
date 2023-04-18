@@ -7,8 +7,18 @@
 ```shell
 pip3 install gigastep
 ```
+or 
+```shell
+pip install -e .
+```
 
 To install JAX with GPU support see [JAX installation instructions](https://github.com/google/jax#installation)
+
+Other required packages:
+- optax
+- flax
+- pygame
+- opencv-python
 
 ## ✨ Features
 

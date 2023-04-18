@@ -1,0 +1,40 @@
+# MIT License
+
+# Copyright (c) 2023 Replicable-MARL
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# ray/rllib config
+
+local_mode: False # True for debug mode only
+share_policy: "group" #  individual(separate) / group(division) / all(share)
+evaluation_interval: 10 # evaluate model every 10 training iterations
+framework: "torch"
+num_workers: 1 # thread number
+num_gpus: 1 # gpu to use
+num_cpus_per_worker: 1 # cpu allocate to each worker
+num_gpus_per_worker: 0 # gpu allocate to each worker
+checkpoint_freq: 100 # save model every 100 training iterations
+checkpoint_end: True # save model at the end of the exp
+restore_path: "" # load model path: 1. resume exp 2. rendering policy
+stop_iters: 9999999 # stop training at this iteration
+stop_timesteps: 2000000 # stop training at this timesteps
+stop_reward: 999999 # stop training at this reward
+seed: 321 # ray seed
+local_dir: "" #  working directory by default

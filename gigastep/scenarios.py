@@ -83,16 +83,16 @@ _builtin_scenarios = {
         "team_1": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
     },
     "identical_10_vs_10": {
-        "team_0": {"default": 20},
-        "team_1": {"default": 20},
+        "team_0": {"default": 10},
+        "team_1": {"default": 10},
     },
     "special_10_vs_10": {
         "team_0": {"tank": 3, "sniper": 3, "scout": 3, "default": 1},
         "team_1": {"tank": 3, "sniper": 3, "scout": 3, "default": 1},
     },
     "identical_5_vs_5": {
-        "team_0": {"default": 20},
-        "team_1": {"default": 20},
+        "team_0": {"default": 5},
+        "team_1": {"default": 5},
     },
     "special_5_vs_5": {
         "team_0": {"tank": 1, "sniper": 1, "scout": 1, "default": 2},
@@ -119,7 +119,7 @@ _builtin_scenarios = {
         "team_1": {"boss": 5},
     },
     "special_20_vs_5": {
-        "team_0": {"tank": 5, "sniper": 5, "scout": 5, "default": 15},
+        "team_0": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
         "team_1": {"boss": 5},
     },
 }

@@ -170,6 +170,10 @@ class GigastepEnv:
             self.v_reset = jax.jit(self.v_reset)
             self.v_step = jax.jit(self.v_step)
 
+    @property
+    def teams(self):
+        return self._per_agent_team
+
     @partial(jax.jit, static_argnums=(0,))
     def _step_agents(self, state, action):
         c_heading = 4

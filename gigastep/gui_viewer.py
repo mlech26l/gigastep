@@ -146,6 +146,16 @@ class GigastepViewer:
                 (self.frame_size, self.frame_size),
                 interpolation=cv2.INTER_NEAREST,
             )
+            ## Code to rotate the image to match the heading of the agent upwards
+            ## This is confusion to play because outward things move very fast but may be useful later
+            # heading = 180 * float(state[0]["heading"][0]) / np.pi + 90
+            # M = cv2.getRotationMatrix2D(
+            #     (obs_1.shape[0] // 2, obs_1.shape[1] // 2),
+            #     -heading,
+            #     1.0,
+            # )
+            # obs_1 = cv2.warpAffine(obs_1, M, (obs_1.shape[0], obs_1.shape[1]))
+
             idx = i + int(self.show_global_state)
             row = idx // self._num_cols
             col = idx % self._num_cols

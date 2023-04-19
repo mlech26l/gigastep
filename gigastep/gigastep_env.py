@@ -503,6 +503,7 @@ class GigastepEnv:
         obs = draw_all_agents(obs, x, y, z, teams, alive, agent_states["sprite"])
         return obs
 
+    @partial(jax.jit, static_argnums=(0,))
     def reset(self, rng):
         rng = jax.random.split(rng, 7)
 
@@ -598,6 +599,24 @@ class GigastepEnv:
         )
 
         return state, obs
+
+    @partial(jax.jit, static_argnums=(0,))
+    def reset_done_episodes(self, states, obs, ep_dones, rng_key):
+        batch_size = ep_dones.shape[0]
+        rng_key = jax.random.split(rng_key, batch_size)
+        new_states, new_obs = self.v_reset(rng_key)
+        reset_states = jax.tree_util.tree_map(
+            lambda x, y: jnp.where(
+                # Create a tuple of (batch_size, 1, ... 1) to broadcast
+                ep_dones.reshape(*([batch_size] + [1] * (x.ndim - 1))),
+                x,
+                y,
+            ),
+            new_states,
+            states,
+        )
+        obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, obs)
+        return reset_states, obs
 
     @classmethod
     def get_initial_state(

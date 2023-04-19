@@ -36,25 +36,37 @@ class JoystickInput:
         return action, pause, reset, quit
 
     def _map_default(self):
-        heading = -self.joy.get_axis(1)  # invert axis
-        dive = 0.5 * (self.joy.get_axis(5) - self.joy.get_axis(2))
-        thrust = self.joy.get_axis(4)
-        pause = self.joy.get_button(7) > 0
+        heading = self.joy.get_axis(0)
+        dive = 0.5 * (self.joy.get_axis(2) - self.joy.get_axis(5))
+        thrust = self.joy.get_button(0) - self.joy.get_button(1)
+        pause = self.joy.get_button(3) > 0
         reset = self.joy.get_button(6) > 0
-        quit = self.joy.get_button(0) > 0
+        quit = self.joy.get_button(7) > 0
 
+        if abs(heading) < 0.1:
+            heading = 0
+        if abs(dive) < 0.1:
+            dive = 0
+        if abs(thrust) < 0.1:
+            thrust = 0
         action = np.array([heading, dive, thrust])
 
         return action, pause, reset, quit
 
     def _map_xbox(self):
-        heading = -self.joy.get_axis(1)  # invert axis
-        dive = 0.5 * (self.joy.get_axis(5) - self.joy.get_axis(2))
-        thrust = self.joy.get_axis(4)
-        pause = self.joy.get_button(7) > 0
+        heading = self.joy.get_axis(0)
+        dive = 0.5 * (self.joy.get_axis(2) - self.joy.get_axis(5))
+        thrust = self.joy.get_button(0) - self.joy.get_button(1)
+        pause = self.joy.get_button(3) > 0
         reset = self.joy.get_button(6) > 0
-        quit = self.joy.get_button(0) > 0
+        quit = self.joy.get_button(7) > 0
 
+        if abs(heading) < 0.1:
+            heading = 0
+        if abs(dive) < 0.1:
+            dive = 0
+        if abs(thrust) < 0.1:
+            thrust = 0
         action = np.array([heading, dive, thrust])
 
         return action, pause, reset, quit
@@ -65,10 +77,27 @@ class JoystickInput:
 
 
 if __name__ == "__main__":
-    joy = JoystickInput()
+    import pygame
+
+    pygame.init()
+    joy = JoystickInput(pygame)
+    t = 0
     while True:
-        print("joy", joy.get_discrete_action()[0])
+        pygame.event.pump()
+        joy.poll()
         time.sleep(0.5)
+        t += 1
+        print("t:", t)
+        print("button 0:", joy.joy.get_button(0))
+        print("button 1:", joy.joy.get_button(1))
+        print("button 2:", joy.joy.get_button(2))
+        print("button 3:", joy.joy.get_button(3))
+        print("button 4:", joy.joy.get_button(4))
+        print("button 5:", joy.joy.get_button(5))
+        print("button 6:", joy.joy.get_button(6))
+        print("button 7:", joy.joy.get_button(7))
+        print("button 8:", joy.joy.get_button(8))
+
     # for i in range(17):
     #     joy.vibrate(1, 1, 100)
     # time.sleep(1)

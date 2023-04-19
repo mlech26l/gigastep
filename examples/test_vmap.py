@@ -5,24 +5,31 @@ import jax.numpy as jnp
 from gigastep import GigastepEnv
 import time
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     n_agents = 20
-    dyn = GigastepEnv(n_agents=n_agents)
-    batch_size = 32
+    env = GigastepEnv(n_agents=n_agents)
+    batch_size = 5
     rng = jax.random.PRNGKey(1)
     rng, key = jax.random.split(rng, 2)
     key = jax.random.split(key, batch_size)
+    states, obs = env.v_reset(key)
+    t = 0
     while True:
-        states, obs = dyn.v_reset(key)
-        while True:
-            rng, key = jax.random.split(rng, 2)
+        t += 1
+        rng, key = jax.random.split(rng, 2)
 
-            actions = jax.random.uniform(key, shape=(batch_size,n_agents, 3), minval=-1, maxval=1)
-            rng, key = jax.random.split(rng, 2)
-            key = jax.random.split(key, batch_size)
-            print("states.shape", states[0]["x"].shape)
-            print("actions.shape", actions.shape)
-            states, obs, r, a, d = dyn.v_step(states, actions, key)
+        actions = jax.random.uniform(
+            key, shape=(batch_size, n_agents, 3), minval=-1, maxval=1
+        )
+        rng, key = jax.random.split(rng, 2)
+        key = jax.random.split(key, batch_size)
+        # print("states.shape", states[0]["x"].shape)
+        # print("actions.shape", actions.shape)
+        states, obs, r, d, ep_dones = env.v_step(states, actions, key)
 
-            time.sleep(0.5)
+        print(f"t= {t}, ep_dones", ep_dones)
+        # time.sleep(0.5)
+        if jnp.any(ep_dones):
+            print("resetting")
+            rng, key = jax.random.split(rng, 2)
+            states, obs = env.reset_done_episodes(states, obs, ep_dones, key)

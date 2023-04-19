@@ -8,6 +8,16 @@ import numpy as np
 import jax.numpy as jnp
 import importlib
 
+from gigastep.joystick_input import JoystickInput
+
+
+def discretize(x, threshold=0.3):
+    if x >= threshold:
+        return 1
+    elif x <= -threshold:
+        return 2
+    return 0
+
 
 class GigastepViewer:
     display = None
@@ -15,31 +25,36 @@ class GigastepViewer:
     def __init__(
         self,
         frame_size,
+        show_global_state=True,
         show_num_agents=1,
     ):
         # only import pygame if the viewer is used
         self.pygame = importlib.import_module("pygame")
-
         self.pygame.init()
         self.clock = self.pygame.time.Clock()
         self.show_num_agents = show_num_agents
+        self.show_global_state = show_global_state
         self.image = None
         self.frame_size = frame_size
         self.should_quit = False
         self.should_reset = False
         self._should_pause = False
         if show_num_agents <= 6:
-            self._num_cols = show_num_agents + 1
+            self._num_cols = show_num_agents + int(show_global_state)
             self._num_rows = 1
         else:
             self._num_cols = 6
-            self._num_rows = math.ceil((show_num_agents + 1) / self._num_cols)
+            self._num_rows = math.ceil(
+                (show_num_agents + int(show_global_state)) / self._num_cols
+            )
         frame = (frame_size * self._num_cols, frame_size * self._num_rows)
 
         if GigastepViewer.display is None:
             GigastepViewer.display = self.pygame.display.set_mode(frame)
 
-        self.action = jnp.array([0, 0, 0])
+        self.discrete_action = 0
+        self.continuous_action = np.zeros(3)
+        self.joystick = JoystickInput(self.pygame)
 
     @property
     def should_pause(self):
@@ -65,7 +80,16 @@ class GigastepViewer:
             ):
                 self.should_reset = True
 
-        action = [0, 0, 0]
+        action = np.zeros(3)
+        if self.joystick.is_connected():
+            action, pause, reset, quit = self.joystick.poll()
+            if pause:
+                self._should_pause = True
+            if reset:
+                self.should_reset = True
+            if quit:
+                self.should_quit = True
+
         if keys[self.pygame.K_a]:
             action[0] = -1
         elif keys[self.pygame.K_d]:
@@ -87,7 +111,11 @@ class GigastepViewer:
         elif keys[self.pygame.K_RIGHT]:
             action[0] = 1
 
-        self.action = jnp.array(action)
+        action_id = discretize(action[0])
+        action_id += 3 * discretize(action[1])
+        action_id += 9 * discretize(action[2])
+        self.discrete_action = action_id
+        self.continuous_action = jnp.array(action)
 
     def draw(self, dyn, state, obs):
         frame_buffer = np.zeros(
@@ -95,18 +123,19 @@ class GigastepViewer:
             dtype=np.uint8,
         )
 
-        global_obs = dyn.get_global_observation(state)
-        global_obs = np.array(global_obs, dtype=np.uint8)
-        # obs = cv2.cvtColor(np.array(obs), cv2.COLOR_RGB2BGR)
-        global_obs = cv2.resize(
-            global_obs,
-            (self.frame_size, self.frame_size),
-            interpolation=cv2.INTER_NEAREST,
-        )
-        frame_buffer[
-            0 : self.frame_size,
-            0 : self.frame_size,
-        ] = global_obs
+        if self.show_global_state:
+            global_obs = dyn.get_global_observation(state)
+            global_obs = np.array(global_obs, dtype=np.uint8)
+            # obs = cv2.cvtColor(np.array(obs), cv2.COLOR_RGB2BGR)
+            global_obs = cv2.resize(
+                global_obs,
+                (self.frame_size, self.frame_size),
+                interpolation=cv2.INTER_NEAREST,
+            )
+            frame_buffer[
+                0 : self.frame_size,
+                0 : self.frame_size,
+            ] = global_obs
 
         for i in range(self.show_num_agents):
             obs_1 = obs[i]
@@ -117,8 +146,9 @@ class GigastepViewer:
                 (self.frame_size, self.frame_size),
                 interpolation=cv2.INTER_NEAREST,
             )
-            row = (i + 1) // self._num_cols
-            col = (i + 1) % self._num_cols
+            idx = i + int(self.show_global_state)
+            row = idx // self._num_cols
+            col = idx % self._num_cols
             frame_buffer[
                 col * self.frame_size : (col + 1) * self.frame_size,
                 row * self.frame_size : (row + 1) * self.frame_size,

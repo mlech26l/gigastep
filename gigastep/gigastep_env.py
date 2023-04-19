@@ -567,7 +567,7 @@ class GigastepEnv:
             z = jnp.where(need_to_resample, z_new, z)
 
         health = jnp.ones((self.n_agents,), dtype=jnp.float32)
-        alive = jnp.ones((self.n_agents,), dtype=jnp.bool_)
+        alive = jnp.ones((self.n_agents,), dtype=jnp.float32)
         agent_state = {
             "x": x,
             "y": y,

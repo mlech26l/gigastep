@@ -80,6 +80,11 @@ while not jnp.all(ep_dones):
     # rewards is a float32 array of shape [batch_size, n_agents]
     # dones is a bool array of shape [batch_size, n_agents]
     # ep_done is a bool array of shape [batch_size]
+
+    # In case at least one episode is done, reset the state of the done episodes only
+    if jnp.any(ep_dones):
+        rng, key = jax.random.split(rng, 2)
+        states, obs = env.reset_done_episodes(state, obs, ep_dones, key)
 ```
 
 ## 🎭 Scenarios (TODO: define scenarios)

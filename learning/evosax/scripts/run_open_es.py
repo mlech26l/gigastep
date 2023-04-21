@@ -5,14 +5,85 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import jax
 import jax.numpy as jnp
-from evosax import OpenES, ParameterReshaper, NetworkMapper
+from evosax import OpenES, ParameterReshaper
+from learning.evosax.networks import NetworkMapperGiga
 from learning.evosax.problems.gigastep import GigastepFitness
 from evosax.utils import ESLog
 from evosax.utils import FitnessShaper  # NOTE: will move to evosax.core
 import tqdm
 
 
-def run_gigastep_fitness(scenario_name: str = "identical_5_vs_5"):
+def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
+
+    if net_type=="CNN":
+        network = NetworkMapperGiga["CNN"](
+            depth_1=1,
+            depth_2=1,
+            features_1=32,
+            features_2=64,
+            kernel_1=8,
+            kernel_2=4,
+            strides_1=2,
+            strides_2=1,
+            num_linear_layers=1,
+            num_hidden_units=64,
+            num_output_units=3,
+            output_activation="gaussian",
+        )
+        # Channel last configuration for conv!
+        pholder = jnp.zeros((1, 84, 84, 3))
+        net_params = network.init(
+            rng,
+            x=pholder,
+            rng=rng,
+        )
+
+        train_evaluator.set_apply_fn(network.apply)
+        test_evaluator.set_apply_fn(network.apply)
+
+    elif net_type=="LSTM_CNN":
+        network = NetworkMapperGiga["LSTM_CNN"](
+            # CNN
+            num_output_units_cnn=64,
+            depth_1=1,
+            depth_2=1,
+            features_1=32,
+            features_2=64,
+            kernel_1=8,
+            kernel_2=4,
+            strides_1=2,
+            strides_2=1,
+            num_linear_layers_cnn=1,
+            num_hidden_units_cnn=64,
+            output_activation_cnn="identity",
+            # LSTM
+            num_hidden_units_lstm=64,
+            num_output_units_lstm=3,
+            output_activation_lstm="gaussian",
+        )
+        # Channel last configuration for conv!
+        pholder = jnp.zeros((1, 84, 84, 3))
+        carry_init = network.initialize_carry(batch_dims=(1,))
+        net_params = network.init(
+            rng,
+            x=pholder,
+            carry=carry_init,
+            rng=rng,
+        )
+
+        train_evaluator.set_apply_fn(network.apply, network.initialize_carry)
+        test_evaluator.set_apply_fn(network.apply, network.initialize_carry)
+      
+    else:
+        raise NotImplementedError
+
+    return net_params, train_evaluator, test_evaluator
+
+
+def run_gigastep_fitness(
+  scenario_name: str = "identical_5_vs_5", 
+  network_type: str = "LSTM_CNN"
+  ):
     num_generations = 100
     evaluate_every_gen = 10
 
@@ -21,33 +92,12 @@ def run_gigastep_fitness(scenario_name: str = "identical_5_vs_5"):
     train_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=False)
     test_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=True, n_devices=1)
 
-    network = NetworkMapper["CNN"](
-        depth_1=1,
-        depth_2=1,
-        features_1=32,
-        features_2=64,
-        kernel_1=8,
-        kernel_2=4,
-        strides_1=2,
-        strides_2=1,
-        num_linear_layers=1,
-        num_hidden_units=64,
-        num_output_units=3,
-        output_activation="gaussian",
-    )
-    # Channel last configuration for conv!
-    pholder = jnp.zeros((1, 84, 84, 3))
-    net_params = network.init(
-        rng,
-        x=pholder,
-        rng=rng,
-    )
+    # Initialize network depending on type
+    out = network_setup(train_evaluator, test_evaluator, rng, net_type=network_type)
+    (net_params, train_evaluator, test_evaluator) = out
 
     train_param_reshaper = ParameterReshaper(net_params)
     test_param_reshaper = ParameterReshaper(net_params, n_devices=1)
-
-    train_evaluator.set_apply_fn(network.apply)
-    test_evaluator.set_apply_fn(network.apply)
 
     fitness_shaper = FitnessShaper(maximize=True)
 
@@ -110,4 +160,4 @@ def run_gigastep_fitness(scenario_name: str = "identical_5_vs_5"):
     
 
 if __name__ == "__main__":
-    run_gigastep_fitness()
+    run_gigastep_fitness("identical_5_vs_1", "LSTM_CNN")

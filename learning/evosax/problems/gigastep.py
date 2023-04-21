@@ -31,6 +31,7 @@ class GigastepFitness(object):
         self.steps_per_member = self.num_env_steps * num_rollouts
 
         self.ego_team_size = jnp.sum(self.env.teams==0)
+        self.ado_team_size = jnp.sum(self.env.teams==1)
 
         self.action_shape = self.env.action_space.shape
         self.input_shape = self.env.observation_space.shape
@@ -97,8 +98,11 @@ class GigastepFitness(object):
             obs, state, ego_policy_params, ado_policy_params, rng, cum_reward, valid_mask = state_input
             rng, rng_step, rng_net = jax.random.split(rng, 3)
 
-            action_ego = self.network(ego_policy_params, obs[:self.ego_team_size], rng=rng_net)
-            action_ado = self.network(ado_policy_params, obs[self.ego_team_size:], rng=rng_net)
+            obs_ego = obs[:self.ego_team_size]
+            obs_ado = obs[self.ego_team_size:]
+
+            action_ego = self.network(ego_policy_params, obs_ego, rng=rng_net)
+            action_ado = self.network(ado_policy_params, obs_ado, rng=rng_net)
             action = jnp.concatenate((action_ego, action_ado), axis=0)
 
             next_s, next_o, reward, dones, done = self.env.step(
@@ -140,38 +144,51 @@ class GigastepFitness(object):
         return cum_return, jnp.array(ep_mask)
 
     def rollout_rnn(
-        self, rng_input: chex.PRNGKey, policy_params: chex.ArrayTree
+        self, rng_input: chex.PRNGKey, ego_policy_params: chex.ArrayTree, ado_policy_params: chex.ArrayTree
     ):
         """Rollout a jitted episode with lax.scan."""
         # Reset the environment
         rng, rng_reset = jax.random.split(rng_input)
         state, obs = self.env.reset(rng_reset)
-        hidden = self.carry_init()
+
+        hidden_ego = self.carry_init(batch_dims=(self.ego_team_size,))
+        hidden_ado = self.carry_init(batch_dims=(self.ado_team_size,))
 
         def policy_step(state_input, tmp):
             """lax.scan compatible step transition in jax env."""
             (
                 obs,
                 state,
-                policy_params,
+                ego_policy_params,
+                ado_policy_params,
                 rng,
-                hidden,
+                hidden_ego,
+                hidden_ado,
                 cum_reward,
                 valid_mask,
             ) = state_input
             rng, rng_step, rng_net = jax.random.split(rng, 3)
-            hidden, action = self.network(policy_params, obs, hidden, rng_net)
+
+            obs_ego = obs[:self.ego_team_size]
+            obs_ado = obs[self.ego_team_size:]
+
+            hidden_ego, action_ego = self.network(ego_policy_params, obs_ego, hidden_ego, rng_net)
+            hidden_ado, action_ado = self.network(ado_policy_params, obs_ado, hidden_ado, rng_net)
+            action = jnp.concatenate((action_ego, action_ado), axis=0)
+
             next_s, next_o, reward, dones, done = self.env.step(
                 state, action, rng_step
             )
-            new_cum_reward = cum_reward + reward * valid_mask
-            new_valid_mask = valid_mask * (1 - done)
+            new_cum_reward = cum_reward + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
+            new_valid_mask = valid_mask * (1 - dones)
             carry, y = [
                 next_o.squeeze(),
                 next_s,
-                policy_params,
+                ego_policy_params,
+                ado_policy_params,
                 rng,
-                hidden,
+                hidden_ego,
+                hidden_ado,
                 new_cum_reward,
                 new_valid_mask,
             ], [new_valid_mask]
@@ -183,11 +200,13 @@ class GigastepFitness(object):
             [
                 obs,
                 state,
-                policy_params,
+                ego_policy_params,
+                ado_policy_params,
                 rng,
-                hidden,
+                hidden_ego,
+                hidden_ado,
                 jnp.array([0.0]),
-                jnp.array([1.0]),
+                jnp.ones((obs.shape[0],)),
             ],
             (),
             self.num_env_steps,

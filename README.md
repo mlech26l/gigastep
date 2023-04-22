@@ -7,8 +7,10 @@
 ```shell
 pip3 install gigastep
 ```
-or 
+or locally via
 ```shell
+git clone git@github.com:mlech26l/gigastep.git
+cd gigastep
 pip install -e .
 ```
 

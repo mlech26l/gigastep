@@ -1,7 +1,7 @@
 import os
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import jax
 import jax.numpy as jnp
@@ -11,6 +11,10 @@ from learning.evosax.problems.gigastep import GigastepFitness
 from evosax.utils import ESLog
 from evosax.utils import FitnessShaper  # NOTE: will move to evosax.core
 import tqdm
+
+import time
+from datetime import datetime
+import numpy as np
 
 
 def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
@@ -86,6 +90,12 @@ def run_gigastep_fitness(
   ):
     num_generations = 100
     evaluate_every_gen = 10
+    log_tensorboard = True
+
+    if log_tensorboard:
+        from torch.utils.tensorboard import SummaryWriter
+        logdir = './logdir/evosax/open_es/' + datetime.now().strftime("%y_%m_%d_%H_%M_%S")
+        writer = SummaryWriter(log_dir=logdir, flush_secs=10)
 
     rng = jax.random.PRNGKey(0)
 
@@ -134,6 +144,12 @@ def run_gigastep_fitness(
         # Update the logging instance.
         es_log = es_logging.update(es_log, x, fitness)
 
+        if log_tensorboard:
+            for key, value in es_log.items():
+                if not "params" in key:
+                    val = value[gen] if len(value.shape) else value
+                    writer.add_scalar('train/' + key, np.array(val), gen)
+
         # Sporadically evaluate the mean & best performance on test evaluator.
         if (gen + 1) % evaluate_every_gen == 0:
             rng, rng_test = jax.random.split(rng)
@@ -147,11 +163,22 @@ def run_gigastep_fitness(
             x_mean_test = jnp.repeat(es_state.mean[None], x_test.shape[0], 0)  # TODO: check if repeat can be removed
             x_mean_test_re = train_param_reshaper.reshape(x_mean_test)
 
-            test_scores = test_evaluator.rollout(
+            test_scores, test_images = test_evaluator.rollout(
                 rng_test, x_test_re, x_mean_test_re
             )
             test_fitness = fitness_shaper.apply(x, test_scores)
 
+            if log_tensorboard:
+                ### Video
+                id_prm = 0
+                id_run = 0
+                id_ego = 0
+                frames = np.array(test_images[id_prm, id_run, :, id_ego])
+
+                frames = np.transpose(frames, (0, 3, 1, 2))  # (T, C, W, H)
+                frames = np.expand_dims(frames, axis=0)      # (N, T, C, W, H)
+                writer.add_video("test/video", frames, global_step=gen, fps=15)
+            
             test_fitness_to_log = test_fitness[1]
             log_steps.append(train_evaluator.total_env_steps)
             log_return.append(test_fitness_to_log)
@@ -160,4 +187,7 @@ def run_gigastep_fitness(
     
 
 if __name__ == "__main__":
+    t_start = time.time()
     run_gigastep_fitness("identical_5_vs_1", "LSTM_CNN")
+    t_end = time.time()
+    print("Runtime = " + str(round(t_end-t_start, 3)))

@@ -148,11 +148,38 @@ class GigastepEnv:
         self.resolution = (resolution_x, resolution_y)
         self.time_delta = 0.1
 
-        self.observation_space = Box(
-            low=jnp.zeros([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8),
-            high=255
-            * jnp.ones([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8),
-        )
+        if obs_type == "rgb":
+            self.observation_space = Box(
+                low=jnp.zeros(
+                    [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
+                ),
+                high=255
+                * jnp.ones(
+                    [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
+                ),
+            )
+        elif obs_type == "vector":
+            self.observation_space = Box(
+                low=jnp.NINF * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
+                high=jnp.inf * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
+            )
+        elif obs_type == "rgb_vector":
+            self.observation_space = (
+                Box(
+                    low=jnp.zeros(
+                        [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
+                    ),
+                    high=255
+                    * jnp.ones(
+                        [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
+                    ),
+                ),
+                Box(
+                    low=jnp.NINF * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
+                    high=jnp.inf * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
+                ),
+            )
+
         self.discrete_actions = discrete_actions
         if self.discrete_actions:
             # 3x3x3 = 27 actions {+1, 0, -1}^3

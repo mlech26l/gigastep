@@ -99,6 +99,7 @@ class GigastepEnv:
         per_agent_team=None,
         tagged_penalty=5,
         discrete_actions=False,
+        obs_type="rgb",
         jit=True,
     ):
         self.n_agents = n_agents
@@ -128,6 +129,11 @@ class GigastepEnv:
             per_agent_range = jnp.ones(n_agents, dtype=jnp.float32)
         self._per_agent_range = per_agent_range
 
+        if obs_type not in ("rgb", "vector", "rbg_vector"):
+            raise ValueError(
+                f"Unknown obs_type {obs_type} (options: rgb, vector, rbg_vector)"
+            )
+        self._obs_type = obs_type
         if per_agent_team is None:
             team_blue = self.n_agents // 2
             team_red = self.n_agents - team_blue
@@ -235,7 +241,7 @@ class GigastepEnv:
         }
         return next_state
 
-    @partial(jax.jit, static_argnums=(0,))
+    # @partial(jax.jit, static_argnums=(0,))
     def step(self, states, actions, rng):
         v_step = jax.vmap(self._step_agents)
 
@@ -369,13 +375,14 @@ class GigastepEnv:
         obs = v_get_observation(
             next_states, has_detected, seen, rng, jnp.arange(x.shape[0])
         )
+
         dones = (1 - alive).astype(jnp.bool_)
         return next_states, obs, reward, dones, episode_done
 
     def get_dones(self, states):
         return states[0]["alive"]
 
-    @partial(jax.jit, static_argnums=(0,))
+    # @partial(jax.jit, static_argnums=(0,))
     def get_observation(self, states, has_detected, took_damage, rng, agent_id):
         agent_states, map_state = states
         x = agent_states["x"]
@@ -399,7 +406,7 @@ class GigastepEnv:
                 + (teams[agent_id] != teams[None, :])
             )
             rand = jax.random.uniform(rng, shape=distance.shape)
-            communicate = distance < rand
+            communicate = distance <= rand
 
             seen = (has_detected + jnp.eye(has_detected.shape[0])) * communicate
         else:
@@ -408,59 +415,108 @@ class GigastepEnv:
             )
         seen = jnp.sum(seen, axis=1) > 0
 
-        x = jnp.round(x * self.resolution[0] / self.limits[0]).astype(jnp.int32)
-        y = jnp.round(y * self.resolution[1] / self.limits[1]).astype(jnp.int32)
-        z = jnp.round((z - self.z_min) * 255 / (self.z_max - self.z_min)).astype(
-            jnp.uint8
-        )
-        # alive = alive.astype(jnp.uint8)
-        teams = teams.astype(jnp.uint8)
-        obs = self._prerendered_maps[map_state["map_idx"]]
+        rgb_obs, vector_obs = None, None
+        if "rgb" in self._obs_type:
+            x = jnp.round(x * self.resolution[0] / self.limits[0]).astype(jnp.int32)
+            y = jnp.round(y * self.resolution[1] / self.limits[1]).astype(jnp.int32)
+            z = jnp.round((z - self.z_min) * 255 / (self.z_max - self.z_min)).astype(
+                jnp.uint8
+            )
+            # alive = alive.astype(jnp.uint8)
+            teams = teams.astype(jnp.uint8)
+            rgb_obs = self._prerendered_maps[map_state["map_idx"]]
 
-        # Border is red
-        obs = obs.at[:, 0, 0].max(255)
-        obs = obs.at[0, :, 0].max(255)
-        obs = obs.at[self.resolution[0] - 1, :, 0].max(255)
-        # Border is white if agent is not taken damage
-        not_taken_damage = (1 - took_damage[agent_id]).astype(jnp.uint8)
-        obs = obs.at[:, 0, :].max(255 * not_taken_damage)
-        obs = obs.at[0, :, :].max(255 * not_taken_damage)
-        obs = obs.at[self.resolution[0] - 1, :, :].max(255 * not_taken_damage)
+            # Border is red
+            rgb_obs = rgb_obs.at[:, 0, 0].max(255)
+            rgb_obs = rgb_obs.at[0, :, 0].max(255)
+            rgb_obs = rgb_obs.at[self.resolution[0] - 1, :, 0].max(255)
+            # Border is white if agent is not taken damage
+            not_taken_damage = (1 - took_damage[agent_id]).astype(jnp.uint8)
+            rgb_obs = rgb_obs.at[:, 0, :].max(255 * not_taken_damage)
+            rgb_obs = rgb_obs.at[0, :, :].max(255 * not_taken_damage)
+            rgb_obs = rgb_obs.at[self.resolution[0] - 1, :, :].max(
+                255 * not_taken_damage
+            )
 
-        # Health bar is green
-        obs = obs.at[:, self.resolution[1] - 1, 1].max(255)
-        health_cutoff = jnp.int32(
-            self.resolution[1]
-            * agent_states["health"][agent_id]
-            / agent_states["max_health"][agent_id]
-        )
-        rb_channel = jnp.where(jnp.arange(self.resolution[1]) < health_cutoff, 0, 255)
-        obs = obs.at[:, self.resolution[1] - 1, 0].set(rb_channel)
-        obs = obs.at[:, self.resolution[1] - 1, 2].set(rb_channel)
-        # obs = obs.at[:, self.resolution[1] - 1, 0].max(255)
+            # Health bar is green
+            rgb_obs = rgb_obs.at[:, self.resolution[1] - 1, 1].max(255)
+            health_cutoff = jnp.int32(
+                self.resolution[1]
+                * agent_states["health"][agent_id]
+                / agent_states["max_health"][agent_id]
+            )
+            rb_channel = jnp.where(
+                jnp.arange(self.resolution[1]) < health_cutoff, 0, 255
+            )
+            rgb_obs = rgb_obs.at[:, self.resolution[1] - 1, 0].set(rb_channel)
+            rgb_obs = rgb_obs.at[:, self.resolution[1] - 1, 2].set(rb_channel)
+            # rgb_obs = rgb_obs.at[:, self.resolution[1] - 1, 0].max(255)
 
-        tail_length = 5
-        own_team = (teams == teams[agent_id]).astype(jnp.uint8)
+            tail_length = 5
+            own_team = (teams == teams[agent_id]).astype(jnp.uint8)
 
-        # Draw tails first
-        for i in range(1, tail_length):
-            intensity = jnp.uint8(255 - 255 * i / tail_length)
-            xi = x - i * jnp.cos(heading)
-            yi = y - i * jnp.sin(heading)
-            xi = jnp.clip(xi, 0, self.resolution[0] - 1).astype(jnp.int32)
-            yi = jnp.clip(yi, 0, self.resolution[0] - 1).astype(jnp.int32)
-            # Own team tail is blue
-            obs = obs.at[xi, yi, 2].add(intensity * own_team * seen, mode="drop")
-            # Other team tail is red
-            obs = obs.at[xi, yi, 0].add(intensity * (1 - own_team) * seen, mode="drop")
-            # Ego tail is white
-            obs = obs.at[xi[agent_id], yi[agent_id], :].max(intensity)
+            # Draw tails first
+            for i in range(1, tail_length):
+                intensity = jnp.uint8(255 - 255 * i / tail_length)
+                xi = x - i * jnp.cos(heading)
+                yi = y - i * jnp.sin(heading)
+                xi = jnp.clip(xi, 0, self.resolution[0] - 1).astype(jnp.int32)
+                yi = jnp.clip(yi, 0, self.resolution[0] - 1).astype(jnp.int32)
+                # Own team tail is blue
+                rgb_obs = rgb_obs.at[xi, yi, 2].add(
+                    intensity * own_team * seen, mode="drop"
+                )
+                # Other team tail is red
+                rgb_obs = rgb_obs.at[xi, yi, 0].add(
+                    intensity * (1 - own_team) * seen, mode="drop"
+                )
+                # Ego tail is white
+                rgb_obs = rgb_obs.at[xi[agent_id], yi[agent_id], :].max(intensity)
 
-        # Draw agents
-        obs = draw_agents_from_ego(
-            obs, x, y, z, teams, seen, agent_id, agent_states["sprite"]
-        )
-        return obs
+            # Draw agents
+            rgb_obs = draw_agents_from_ego(
+                rgb_obs, x, y, z, teams, seen, agent_id, agent_states["sprite"]
+            )
+        if "vector" in self._obs_type:
+            # sort by distance from ego
+            distance = jnp.sqrt(
+                jnp.square(x[agent_id] - x) + jnp.square(y[agent_id] - y)
+            )
+            # agents that are not seen are at the end of the list
+            ranking = jnp.where(
+                seen, distance, jnp.square(self.limits[0] + self.limits[1]) + 1
+            )
+            # For some reason we need to manually set the ego agent to location 0
+            ranking = jnp.where(jnp.arange(self.n_agents) == agent_id, -1, ranking)
+
+            sorted_indices = jnp.argsort(ranking).flatten()
+            # stack observations in order of distance from ego
+            vector_obs = jnp.stack(
+                [
+                    # ego obs
+                    seen[sorted_indices],
+                    (seen * agent_states["team"])[sorted_indices],
+                    (seen * agent_states["x"])[sorted_indices],
+                    (seen * agent_states["y"])[sorted_indices],
+                    (seen * agent_states["z"])[sorted_indices],
+                    (seen * agent_states["heading"])[sorted_indices],
+                ],
+                axis=1,  # stack along the second dimension
+            )
+            vector_obs = vector_obs.flatten()
+            # now obs of ego is at the beginning of the vector
+            # obs other agents are consecutive and sorted by distance from ego
+
+        if self._obs_type == "rgb":
+            return rgb_obs
+        elif self._obs_type == "vector":
+            return vector_obs
+        elif self._obs_type == "rgb_vector":
+            return rgb_obs, vector_obs
+        else:
+            raise ValueError(
+                f"Unknown observation type {self._obs_type}! This code should not be reached"
+            )
 
     @partial(jax.jit, static_argnums=(0,))
     def get_global_observation(self, states):

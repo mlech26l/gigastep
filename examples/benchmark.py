@@ -3,7 +3,7 @@ import time
 
 import jax
 import jax.numpy as jnp
-from spacesnakx import Spacesnakx
+from gigastep import GigastepEnv
 import time
 import time
 
@@ -51,6 +51,7 @@ def run_n_steps2(env, batch_size, n_steps):
 
 def print_step_per_second(step_per_second):
     postfix = ""
+    orig_step_per_second = step_per_second
     if step_per_second > 1e9:
         postfix = "G"
         step_per_second = step_per_second / 1e9
@@ -60,26 +61,42 @@ def print_step_per_second(step_per_second):
     elif step_per_second > 1e3:
         postfix = "k"
         step_per_second = step_per_second / 1e3
-    print(f"{step_per_second:0.1f}{postfix} steps per second")
+    print(f"{step_per_second:0.1f}{postfix} steps per second", end=" ")
+    sec_to_100M = 100_000_000 / orig_step_per_second
+    if sec_to_100M >= 60:
+        print(f" (time to 100M steps: {sec_to_100M/60:0.1f} minutes)", end="")
+    else:
+        print(f" (time to 100M steps: {sec_to_100M:0.1f} seconds)", end="")
+    print()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=32, type=int)  # in minutes
+    parser.add_argument("--batch_size", default=1024, type=int)  # in minutes
     parser.add_argument("--n_agents", default=8, type=int)  # in minutes
-    parser.add_argument("--n_steps", default=100, type=int)  # in minutes
+    parser.add_argument("--n_steps", default=300, type=int)  # in minutes
+    parser.add_argument("--obs_type", default="rgb")  # in minutes
     args = parser.parse_args()
-    env = Spacesnakx(n_agents=args.n_agents)
+    env = GigastepEnv(n_agents=args.n_agents, obs_type=args.obs_type)
     run_n_steps(env, args.batch_size, 10)
 
-    start_time = time.time()
+    nojit_start = time.time()
+    run_n_steps(env, args.batch_size, args.n_steps)
+    nojit_time = time.time()
+    jit_start = time.time()
     run_n_steps2(env, args.batch_size, args.n_steps)
-    # run_n_steps(env, args.batch_size, args.n_steps)
-    end_time = time.time()
+    jit_time = time.time()
     num_agent_steps = args.n_steps * args.batch_size * args.n_agents
-    steps_per_seconds = num_agent_steps / (end_time - start_time)
-    print(f"Run {num_agent_steps} agent steps in {end_time - start_time} seconds")
-    print_step_per_second(steps_per_seconds)
+    steps_per_seconds_nojit = num_agent_steps / (nojit_time - nojit_start)
+    steps_per_seconds_jit = num_agent_steps / (jit_time - jit_start)
+    print(
+        f"Run {num_agent_steps:.0f} agent steps in {nojit_time - nojit_start:.1f} seconds (no jit)"
+    )
+    print_step_per_second(steps_per_seconds_nojit)
+    print(
+        f"Run {num_agent_steps:.0f} agent steps in {jit_time - jit_start:.1f} seconds (jit)"
+    )
+    print_step_per_second(steps_per_seconds_jit)
 
 
 if __name__ == "__main__":

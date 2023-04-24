@@ -10,11 +10,19 @@ class ScenarioBuilder:
         self._per_agent_range = []
         self._per_agent_thrust = []
         self._map = "all"
+        self._obs_type = "rgb"
 
     def set_map(self, map):
         if map not in ("all", "empty"):
             raise ValueError(f"Unknown map {map}")
         self._map = map
+
+    def set_obs_type(self, obs_type):
+        if obs_type not in ("rgb", "vector", "rbg_vector"):
+            raise ValueError(
+                f"Unknown obs_type {obs_type} (options: rgb, vector, rbg_vector)"
+            )
+        self._obs_type = obs_type
 
     def add(
         self,
@@ -56,6 +64,7 @@ class ScenarioBuilder:
             "per_agent_range": jnp.array(self._per_agent_range),
             "per_agent_thrust": jnp.array(self._per_agent_thrust),
             "maps": self._map,
+            "obs_type": self._obs_type,
         }
 
     @classmethod
@@ -125,14 +134,15 @@ _builtin_scenarios = {
 }
 
 
-def make_scenario(name):
+def make_scenario(name, obs_type=None):
     if name not in _builtin_scenarios.keys():
         raise ValueError(f"Scenario {name} not found.")
 
     scenario = _builtin_scenarios[name]
-    if isinstance(scenario, dict):
-        return ScenarioBuilder.from_config(scenario).make()
-    return _builtin_scenarios[name]()
+    scenario = ScenarioBuilder.from_config(scenario)
+    if obs_type is not None:
+        scenario.set_obs_type(obs_type)
+    return scenario.make()
 
 
 def list_scenarios():

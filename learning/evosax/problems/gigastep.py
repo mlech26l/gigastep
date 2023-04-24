@@ -20,10 +20,6 @@ class GigastepFitness(object):
         self.num_rollouts = num_rollouts
         self.test = test
 
-        ####################################################################
-        ### FIXME: the RNN rollouts don't use ego/ado policy definintion ###
-        ####################################################################
-
         # Define the RL environment & replace default parameters if desired
         self.env = gigastep.make_scenario(env_name)
 
@@ -80,10 +76,18 @@ class GigastepFitness(object):
     def rollout(self, rng_input: chex.PRNGKey, ego_policy_params: chex.ArrayTree, ado_policy_params: chex.ArrayTree):
         """Placeholder fn call for rolling out a population for multi-evals."""
         rng_pop = jax.random.split(rng_input, self.num_rollouts)
-        scores, masks = jax.jit(self.rollout_map)(rng_pop, ego_policy_params, ado_policy_params)
+        out_rollout_map = jax.jit(self.rollout_map)(rng_pop, ego_policy_params, ado_policy_params)
+        scores = out_rollout_map[0]
+        masks = out_rollout_map[1]
+        if self.test:
+            images = out_rollout_map[2]
         # Update total step counter using only transitions before termination of all ego team agents
         self.total_env_steps += masks[..., :self.ego_team_size].sum(axis=-2).max(axis=-1).sum()
-        return scores.mean(axis=-1)
+        if self.test:
+            out_rollout = scores.mean(axis=-1), images
+        else:
+            out_rollout = scores.mean(axis=-1)
+        return out_rollout
 
     def rollout_ffw(
         self, rng_input: chex.PRNGKey, ego_policy_params: chex.ArrayTree, ado_policy_params: chex.ArrayTree
@@ -120,7 +124,10 @@ class GigastepFitness(object):
                 new_cum_reward,
                 new_valid_mask,
             ]
-            y = [new_valid_mask]
+            if self.test:
+                y = [new_valid_mask, next_o.squeeze()]
+            else:
+                y = [new_valid_mask]
             return carry, y
 
         # Scan over episode step loop
@@ -139,9 +146,15 @@ class GigastepFitness(object):
             self.num_env_steps,
         )
         # Return the sum of rewards accumulated by agent in episode rollout
-        ep_mask = scan_out
+        if self.test:
+            ep_mask = scan_out[0]
+            ep_obsv = scan_out[1]
+            out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv))
+        else:
+            ep_mask = scan_out[0]
+            out_scan = (jnp.array(ep_mask))
         cum_return = carry_out[-2].squeeze()
-        return cum_return, jnp.array(ep_mask)
+        return cum_return, *out_scan
 
     def rollout_rnn(
         self, rng_input: chex.PRNGKey, ego_policy_params: chex.ArrayTree, ado_policy_params: chex.ArrayTree
@@ -181,7 +194,7 @@ class GigastepFitness(object):
             )
             new_cum_reward = cum_reward + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
             new_valid_mask = valid_mask * (1 - dones)
-            carry, y = [
+            carry = [
                 next_o.squeeze(),
                 next_s,
                 ego_policy_params,
@@ -191,7 +204,11 @@ class GigastepFitness(object):
                 hidden_ado,
                 new_cum_reward,
                 new_valid_mask,
-            ], [new_valid_mask]
+            ]
+            if self.test:
+                y = [new_valid_mask, next_o.squeeze()]
+            else:
+                y = [new_valid_mask]
             return carry, y
 
         # Scan over episode step loop
@@ -212,6 +229,12 @@ class GigastepFitness(object):
             self.num_env_steps,
         )
         # Return masked sum of rewards accumulated by agent in episode
-        ep_mask = scan_out
+        if self.test:
+            ep_mask = scan_out[0]
+            ep_obsv = scan_out[1]
+            out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv))
+        else:
+            ep_mask = scan_out[0]
+            out_scan = (jnp.array(ep_mask))
         cum_return = carry_out[-2].squeeze()
-        return cum_return, jnp.array(ep_mask)
+        return cum_return, *out_scan

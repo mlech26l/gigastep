@@ -116,6 +116,7 @@ class GigastepEnv:
         self.use_stochastic_obs = use_stochastic_obs
         self.use_stochastic_comm = use_stochastic_comm
         self.max_communication_range = 10
+        self.team_reward = team_reward
 
         if per_agent_sprites is None:
             per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)

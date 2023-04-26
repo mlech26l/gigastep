@@ -160,8 +160,8 @@ class GigastepEnv:
             )
         elif obs_type == "vector":
             self.observation_space = Box(
-                low=jnp.NINF * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
-                high=jnp.inf * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
+                low=jnp.NINF * jnp.ones([8 * self.n_agents], dtype=jnp.float32),
+                high=jnp.inf * jnp.ones([8 * self.n_agents], dtype=jnp.float32),
             )
         elif obs_type == "rgb_vector":
             self.observation_space = (
@@ -175,8 +175,8 @@ class GigastepEnv:
                     ),
                 ),
                 Box(
-                    low=jnp.NINF * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
-                    high=jnp.inf * jnp.ones([6 * self.n_agents], dtype=jnp.float32),
+                    low=jnp.NINF * jnp.ones([8 * self.n_agents], dtype=jnp.float32),
+                    high=jnp.inf * jnp.ones([8 * self.n_agents], dtype=jnp.float32),
                 ),
             )
 
@@ -527,6 +527,8 @@ class GigastepEnv:
                     (seen * agent_states["y"])[sorted_indices],
                     (seen * agent_states["z"])[sorted_indices],
                     (seen * agent_states["heading"])[sorted_indices],
+                    (seen * agent_states["v"])[sorted_indices],
+                    (seen * agent_states["health"])[sorted_indices],
                 ],
                 axis=1,  # stack along the second dimension
             )

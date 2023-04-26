@@ -88,8 +88,8 @@ class GigastepEnv:
         collision_penalty=10,
         limit_x=10,
         limit_y=10,
-        resolution_x=84,
-        resolution_y=84,
+        resolution_x=40,
+        resolution_y=40,
         n_agents=10,
         maps="all",
         per_agent_sprites=None,
@@ -98,6 +98,7 @@ class GigastepEnv:
         per_agent_range=None,
         per_agent_team=None,
         tagged_penalty=5,
+        team_reward= 0,
         discrete_actions=False,
         obs_type="rgb",
         jit=True,
@@ -365,20 +366,23 @@ class GigastepEnv:
 
         detected_other_agent = jnp.sum(has_detected, axis=0)
 
+        # Check if agents are dead
+        alive = alive * (health > 0)
         # Reward is proportional to the number of agents seen minus number of seen itself
-        reward = (detected_other_agent - seen) * self.time_delta
+        reward = jnp.exp((detected_other_agent - seen) * self.time_delta)*alive
         # Penalize for collisions or going out of bounds
-        reward = reward - (collided + out_of_bounds + hit_box) * self.collision_penalty
+        reward = reward + 0.1 * jnp.exp( - 10*(collided + out_of_bounds + hit_box) * self.collision_penalty * alive)*alive
         # Penalize for being tagged
-        reward = reward - (health <= 0) * alive * self.tagged_penalty
+        reward = reward + 0.1 * jnp.exp( - 10*(health <= 0).astype(jnp.float32) * alive * self.tagged_penalty)*alive
 
         # Check if episode is done (all agents of one team dead)
         alive_team1 = jnp.sum(alive * (teams == 0))
         alive_team2 = jnp.sum(alive * (teams == 1))
         episode_done = (alive_team1 == 0) | (alive_team2 == 0)
 
-        # Check if agents are dead
-        alive = alive * (health > 0)
+        # Reward the team with more live agents
+        reward = reward * (1-self.team_reward)/5
+
 
         agent_states = {
             "x": x,

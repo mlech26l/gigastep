@@ -80,11 +80,12 @@ class GigastepFitness(object):
         scores = out_rollout_map[0]
         masks = out_rollout_map[1]
         if self.test:
-            images = out_rollout_map[2]
+            images_global = out_rollout_map[2]
+            images_ego = out_rollout_map[3]
         # Update total step counter using only transitions before termination of all ego team agents
         self.total_env_steps += masks[..., :self.ego_team_size].sum(axis=-2).max(axis=-1).sum()
         if self.test:
-            out_rollout = scores.mean(axis=-1), images
+            out_rollout = scores.mean(axis=-1), images_global, images_ego
         else:
             out_rollout = scores.mean(axis=-1)
         return out_rollout
@@ -112,6 +113,9 @@ class GigastepFitness(object):
             next_s, next_o, reward, dones, done = self.env.step(
                 state, action, rng_step
             )
+
+            next_o_global = self.env.get_global_observation(next_s)
+
             # reward = reward[..., :self.ego_team_size].mean(axis=-1)  # FIXME: mean over all agent reward [testing, not desired]
             new_cum_reward = cum_reward + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
             new_valid_mask = valid_mask * (1 - dones)
@@ -125,7 +129,7 @@ class GigastepFitness(object):
                 new_valid_mask,
             ]
             if self.test:
-                y = [new_valid_mask, next_o.squeeze()]
+                y = [new_valid_mask, next_o_global.squeeze(), next_o.squeeze()]
             else:
                 y = [new_valid_mask]
             return carry, y
@@ -148,8 +152,9 @@ class GigastepFitness(object):
         # Return the sum of rewards accumulated by agent in episode rollout
         if self.test:
             ep_mask = scan_out[0]
-            ep_obsv = scan_out[1]
-            out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv))
+            ep_obsv_global = scan_out[1]
+            ep_obsv_ego = scan_out[2]
+            out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv_global), jnp.array(ep_obsv_ego))
         else:
             ep_mask = scan_out[0]
             out_scan = (jnp.array(ep_mask))
@@ -192,6 +197,9 @@ class GigastepFitness(object):
             next_s, next_o, reward, dones, done = self.env.step(
                 state, action, rng_step
             )
+
+            next_o_global = self.env.get_global_observation(next_s)
+
             new_cum_reward = cum_reward + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
             new_valid_mask = valid_mask * (1 - dones)
             carry = [
@@ -206,7 +214,7 @@ class GigastepFitness(object):
                 new_valid_mask,
             ]
             if self.test:
-                y = [new_valid_mask, next_o.squeeze()]
+                y = [new_valid_mask, next_o_global.squeeze(), next_o.squeeze()]
             else:
                 y = [new_valid_mask]
             return carry, y
@@ -231,8 +239,9 @@ class GigastepFitness(object):
         # Return masked sum of rewards accumulated by agent in episode
         if self.test:
             ep_mask = scan_out[0]
-            ep_obsv = scan_out[1]
-            out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv))
+            ep_obsv_global = scan_out[1]
+            ep_obsv_ego = scan_out[2]
+            out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv_global), jnp.array(ep_obsv_ego))
         else:
             ep_mask = scan_out[0]
             out_scan = (jnp.array(ep_mask))

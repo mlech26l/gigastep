@@ -35,7 +35,7 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
             output_activation="gaussian",
         )
         # Channel last configuration for conv!
-        pholder = jnp.zeros((1, 84, 84, 3))
+        pholder = jnp.zeros((1, *train_evaluator.env.resolution, 3))
         net_params = network.init(
             rng,
             x=pholder,
@@ -66,7 +66,7 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
             output_activation_lstm="gaussian",
         )
         # Channel last configuration for conv!
-        pholder = jnp.zeros((1, 84, 84, 3))
+        pholder = jnp.zeros((1, *train_evaluator.env.resolution, 3))
         carry_init = network.initialize_carry(batch_dims=(1,))
         net_params = network.init(
             rng,
@@ -88,7 +88,7 @@ def run_gigastep_fitness(
   scenario_name: str = "identical_5_vs_5", 
   network_type: str = "LSTM_CNN"
   ):
-    num_generations = 100
+    num_generations = 1000
     evaluate_every_gen = 10
     log_tensorboard = True
 
@@ -109,9 +109,9 @@ def run_gigastep_fitness(
     train_param_reshaper = ParameterReshaper(net_params)
     test_param_reshaper = ParameterReshaper(net_params, n_devices=1)
 
-    fitness_shaper = FitnessShaper(maximize=True)
+    # fitness_shaper = FitnessShaper(maximize=True)
 
-    strategy = OpenES(popsize=30, num_dims=train_param_reshaper.total_params)
+    strategy = OpenES(popsize=30, num_dims=train_param_reshaper.total_params, maximize=True)
     es_state = strategy.initialize(rng)
 
     es_logging = ESLog(
@@ -138,16 +138,16 @@ def run_gigastep_fitness(
 
         # Rollout fitness and update parameter distribution
         scores = train_evaluator.rollout(rng_eval, x_re, x_mean_re)
-        fitness = fitness_shaper.apply(x, scores)
-        es_state = strategy.tell(x, fitness, es_state)
+        # fitness = fitness_shaper.apply(x, scores)
+        es_state = strategy.tell(x, scores, es_state)
 
         # Update the logging instance.
-        es_log = es_logging.update(es_log, x, fitness)
+        es_log = es_logging.update(es_log, x, scores)
 
         if log_tensorboard:
             for key, value in es_log.items():
                 if not "params" in key:
-                    val = value[gen] if len(value.shape) else value
+                    val = value[gen-1] if len(value.shape) else value
                     writer.add_scalar('train/' + key, np.array(val), gen)
 
         # Sporadically evaluate the mean & best performance on test evaluator.
@@ -163,31 +163,36 @@ def run_gigastep_fitness(
             x_mean_test = jnp.repeat(es_state.mean[None], x_test.shape[0], 0)  # TODO: check if repeat can be removed
             x_mean_test_re = train_param_reshaper.reshape(x_mean_test)
 
-            test_scores, test_images = test_evaluator.rollout(
+            test_scores, test_images_global, test_images_ego = test_evaluator.rollout(
                 rng_test, x_test_re, x_mean_test_re
             )
-            test_fitness = fitness_shaper.apply(x, test_scores)
+            # test_fitness = fitness_shaper.apply(x, test_scores)
 
             if log_tensorboard:
                 ### Video
                 id_prm = 0
                 id_run = 0
                 id_ego = 0
-                frames = np.array(test_images[id_prm, id_run, :, id_ego])
+                frames_ego = np.array(test_images_ego[id_prm, id_run, :, id_ego])  # NOTE: this for agent-specific obs
+                frames_glb = np.array(test_images_global[id_prm, id_run])
 
-                frames = np.transpose(frames, (0, 3, 1, 2))  # (T, C, W, H)
-                frames = np.expand_dims(frames, axis=0)      # (N, T, C, W, H)
-                writer.add_video("test/video", frames, global_step=gen, fps=15)
+                frames_ego = np.transpose(frames_ego, (0, 3, 1, 2))  # (T, C, W, H)
+                frames_ego = np.expand_dims(frames_ego, axis=0)      # (N, T, C, W, H)
+                writer.add_video("test/video-ego", frames_ego, global_step=gen, fps=15)
+
+                frames_glb = np.transpose(frames_glb, (0, 3, 1, 2))  # (T, C, W, H)
+                frames_glb = np.expand_dims(frames_glb, axis=0)      # (N, T, C, W, H)
+                writer.add_video("test/video-all", frames_glb, global_step=gen, fps=15)
             
-            test_fitness_to_log = test_fitness[1]
+            test_return_to_log = test_scores[1]
             log_steps.append(train_evaluator.total_env_steps)
-            log_return.append(test_fitness_to_log)
-            t.set_description(f"R: " + "{:.3f}".format(test_fitness_to_log.item()))
+            log_return.append(test_return_to_log)
+            t.set_description(f"R: " + "{:.3f}".format(test_return_to_log.item()))
             t.refresh()
     
 
 if __name__ == "__main__":
     t_start = time.time()
-    run_gigastep_fitness("identical_5_vs_1", "LSTM_CNN")
+    run_gigastep_fitness("identical_5_vs_5", "LSTM_CNN")
     t_end = time.time()
     print("Runtime = " + str(round(t_end-t_start, 3)))

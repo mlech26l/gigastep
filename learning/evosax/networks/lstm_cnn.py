@@ -52,7 +52,7 @@ class LSTM_CNN(nn.Module):
     # LSTM
     num_output_units_lstm: int = 10
     num_hidden_units_lstm: int = 32
-    output_activation_lstm: str = "identity"
+    output_activation_lstm: str = "gaussian"
     kernel_init_type_lstm: str = "lecun_normal"
     model_name: str = "LSTM_CNN"
 

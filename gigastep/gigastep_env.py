@@ -98,7 +98,7 @@ class GigastepEnv:
         per_agent_range=None,
         per_agent_team=None,
         tagged_penalty=5,
-        team_reward=0,
+        team_reward= 0,
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
@@ -332,7 +332,6 @@ class GigastepEnv:
             & (y[:, None] > boxes[None, :, 1])
             & (y[:, None] < boxes[None, :, 3])
         )
-
         hit_box = jnp.sum(hit_box.astype(jnp.float32), axis=1) > 0
         hit_box = hit_box.astype(jnp.float32)
         alive = alive * (1 - hit_box)
@@ -793,7 +792,10 @@ class GigastepEnv:
             new_states,
             states,
         )
-        obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, obs)
+        if len(obs.shape)==3:
+            obs = jnp.where(ep_dones.reshape(batch_size, 1, 1), new_obs, obs)
+        else:
+            obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, obs)
         return reset_states, obs
 
     @classmethod

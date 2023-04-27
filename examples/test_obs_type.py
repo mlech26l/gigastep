@@ -54,6 +54,7 @@ while not jnp.all(ep_dones):
     if t <= 1:
         print("obs.shape", obs.shape)
     t += 1
+    print(f"first agent's view {obs[0][0].reshape(15,9).transpose()}")
 
     # In case at least one episode is done, reset the state of the done episodes only
     if jnp.any(ep_dones):

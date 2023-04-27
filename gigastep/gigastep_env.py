@@ -536,7 +536,7 @@ class GigastepEnv:
             sorted_indices = jnp.argsort(ranking).flatten()
             # stack observations in order of distance from ego
             # The first element is the absolute value of x, y, z
-            agent_states_relative_team = agent_states["team"] - agent_states["team"][agent_id]
+            agent_states_relative_team = (agent_states["team"] == agent_states["team"][agent_id]).astype(jnp.float32)
             agent_states_relative_x = agent_states["x"] - agent_states["x"][agent_id]
             agent_states_relative_x = agent_states_relative_x.at[agent_id].set(agent_states["x"][agent_id])
             agent_states_relative_y = agent_states["y"] - agent_states["y"][agent_id]
@@ -733,7 +733,10 @@ class GigastepEnv:
             new_states,
             states,
         )
-        obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, obs)
+        if len(obs.shape)==3:
+            obs = jnp.where(ep_dones.reshape(batch_size, 1, 1), new_obs, obs)
+        else:
+            obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, obs)
         return reset_states, obs
 
     @classmethod

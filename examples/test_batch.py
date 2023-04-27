@@ -52,7 +52,7 @@ while True:
 
     if viewer.should_quit:
         sys.exit(1)
-
+    print(state[0]["team"])
     print(rewards)
     # obs is an uint8 array of shape [batch_size, n_agents, 84,84,3]
     # rewards is a float32 array of shape [batch_size, n_agents]

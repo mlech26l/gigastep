@@ -98,10 +98,10 @@ class GigastepEnv:
         per_agent_range=None,
         per_agent_team=None,
         tagged_penalty=5,
-        team_reward= 0,
+        team_reward=0,
         discrete_actions=False,
         obs_type="rgb",
-        max_agent_can_be_seen_in_vec_obs=15,
+        max_agent_in_vec_obs=15,
         jit=True,
     ):
         self.n_agents = n_agents
@@ -118,7 +118,7 @@ class GigastepEnv:
         self.use_stochastic_comm = use_stochastic_comm
         self.max_communication_range = 10
         self.team_reward = team_reward
-        self.max_agent_can_be_seen_in_vec_obs = min(self.n_agents,max_agent_can_be_seen_in_vec_obs)
+        self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
 
         if per_agent_sprites is None:
             per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)
@@ -152,6 +152,14 @@ class GigastepEnv:
         self.resolution = (resolution_x, resolution_y)
         self.time_delta = 0.1
 
+        self._maps = get_builtin_maps(maps, self.limits)
+        # maps need to be prerendered because range indexing is not supported in jax.jit
+        self._prerendered_maps = prerender_maps(
+            self._maps, self.resolution, self.limits
+        )
+
+        # How many variables we need to represent the map
+        map_obs_len = 4 * self._maps.shape[1]
         if obs_type == "rgb":
             self.observation_space = Box(
                 low=jnp.zeros(
@@ -164,8 +172,16 @@ class GigastepEnv:
             )
         elif obs_type == "vector":
             self.observation_space = Box(
-                low=jnp.NINF * jnp.ones([9 * self.max_agent_can_be_seen_in_vec_obs], dtype=jnp.float32),
-                high=jnp.inf * jnp.ones([9 * self.max_agent_can_be_seen_in_vec_obs], dtype=jnp.float32),
+                low=jnp.NINF
+                * jnp.ones(
+                    [map_obs_len + 8 * self.max_agent_in_vec_obs],
+                    dtype=jnp.float32,
+                ),
+                high=jnp.inf
+                * jnp.ones(
+                    [map_obs_len + 8 * self.max_agent_in_vec_obs],
+                    dtype=jnp.float32,
+                ),
             )
         elif obs_type == "rgb_vector":
             self.observation_space = (
@@ -179,8 +195,16 @@ class GigastepEnv:
                     ),
                 ),
                 Box(
-                    low=jnp.NINF * jnp.ones([9 * self.max_agent_can_be_seen_in_vec_obs], dtype=jnp.float32),
-                    high=jnp.inf * jnp.ones([9 * self.max_agent_can_be_seen_in_vec_obs], dtype=jnp.float32),
+                    low=jnp.NINF
+                    * jnp.ones(
+                        [map_obs_len + 8 * self.max_agent_in_vec_obs],
+                        dtype=jnp.float32,
+                    ),
+                    high=jnp.inf
+                    * jnp.ones(
+                        [map_obs_len + 8 * self.max_agent_in_vec_obs],
+                        dtype=jnp.float32,
+                    ),
                 ),
             )
 
@@ -193,12 +217,6 @@ class GigastepEnv:
             ).T.reshape(-1, 3)
         else:
             self.action_space = Box(low=-jnp.ones(3), high=jnp.ones(3))
-
-        self._maps = get_builtin_maps(maps, self.limits)
-        # maps need to be prerendered because range indexing is not supported in jax.jit
-        self._prerendered_maps = prerender_maps(
-            self._maps, self.resolution, self.limits
-        )
 
         self._v_step_agents = jax.vmap(self._step_agents)
         self.v_step = jax.vmap(self.step)
@@ -269,7 +287,6 @@ class GigastepEnv:
             "max_health": state["max_health"],
             "max_thrust": state["max_thrust"],
             "sprite": state["sprite"],
-            "box_position": state["box_position"]
         }
         return next_state
 
@@ -287,7 +304,6 @@ class GigastepEnv:
         z = agent_states["z"]
         alive = agent_states["alive"]
         teams = agent_states["team"]
-        box_position = agent_states["box_position"]
 
         out_of_bounds = (x < 0) | (x > self.limits[0]) | (y < 0) | (y > self.limits[1])
         alive = alive * (1 - out_of_bounds)
@@ -316,12 +332,6 @@ class GigastepEnv:
             & (y[:, None] > boxes[None, :, 1])
             & (y[:, None] < boxes[None, :, 3])
         )
-        boxes_flatten = boxes.flatten()
-        if box_position.shape[0]>boxes_flatten.shape[0]:
-            box_position = box_position.at[:boxes_flatten.shape[0]].set(boxes.flatten())
-
-        else:
-            raise Exception("Extend the obervation size to include box positons")
 
         hit_box = jnp.sum(hit_box.astype(jnp.float32), axis=1) > 0
         hit_box = hit_box.astype(jnp.float32)
@@ -381,11 +391,28 @@ class GigastepEnv:
         # Check if agents are dead
         alive = alive * (health > 0)
         # Reward is proportional to the number of agents seen minus number of seen itself
-        reward = jnp.exp((detected_other_agent - seen) * self.time_delta)*alive
+        reward = jnp.exp((detected_other_agent - seen) * self.time_delta) * alive
         # Penalize for collisions or going out of bounds
-        reward = reward + 0.1 * jnp.exp( - 10*(collided + out_of_bounds + hit_box) * self.collision_penalty * alive)*alive
+        reward = (
+            reward
+            + 0.1
+            * jnp.exp(
+                -10
+                * (collided + out_of_bounds + hit_box)
+                * self.collision_penalty
+                * alive
+            )
+            * alive
+        )
         # Penalize for being tagged
-        reward = reward + 0.1 * jnp.exp( - 10*(health <= 0).astype(jnp.float32) * alive * self.tagged_penalty)*alive
+        reward = (
+            reward
+            + 0.1
+            * jnp.exp(
+                -10 * (health <= 0).astype(jnp.float32) * alive * self.tagged_penalty
+            )
+            * alive
+        )
 
         # Check if episode is done (all agents of one team dead)
         alive_team1 = jnp.sum(alive * (teams == 0))
@@ -393,8 +420,7 @@ class GigastepEnv:
         episode_done = (alive_team1 == 0) | (alive_team2 == 0)
 
         # Reward the team with more live agents
-        reward = reward * (1-self.team_reward)/5
-
+        reward = reward * (1 - self.team_reward) / 5
 
         agent_states = {
             "x": x,
@@ -409,7 +435,6 @@ class GigastepEnv:
             "max_health": agent_states["max_health"],
             "detection_range": agent_states["detection_range"],
             "sprite": agent_states["sprite"],
-            "box_position": box_position
         }
         next_states = (agent_states, map_state)
         v_get_observation = jax.vmap(
@@ -534,36 +559,73 @@ class GigastepEnv:
             ranking = jnp.where(jnp.arange(self.n_agents) == agent_id, -1, ranking)
 
             sorted_indices = jnp.argsort(ranking).flatten()
-            # stack observations in order of distance from ego
-            # The first element is the absolute value of x, y, z
-            agent_states_relative_team = agent_states["team"] - agent_states["team"][agent_id]
-            agent_states_relative_x = agent_states["x"] - agent_states["x"][agent_id]
-            agent_states_relative_x = agent_states_relative_x.at[agent_id].set(agent_states["x"][agent_id])
-            agent_states_relative_y = agent_states["y"] - agent_states["y"][agent_id]
-            agent_states_relative_y = agent_states_relative_y.at[agent_id].set(agent_states["y"][agent_id])
-            agent_states_relative_z = agent_states["z"] - agent_states["z"][agent_id]
-            agent_states_relative_z = agent_states_relative_z.at[agent_id].set(agent_states["z"][agent_id])
-            agent_states_relative_heading = agent_states["heading"] - agent_states["heading"][agent_id]
-            agent_states_relative_heading = agent_states_relative_heading.at[agent_id].set(agent_states["heading"][agent_id])
-            agent_states_relative_v = agent_states["v"] - agent_states["v"][agent_id]
-            agent_states_relative_v = agent_states_relative_v.at[agent_id].set(agent_states["v"][agent_id])
+            # State vector obs are relative to the ego agent
+            relative_team = agent_states["team"] - agent_states["team"][agent_id]
+            relative_x = agent_states["x"] - agent_states["x"][agent_id]
+            relative_y = agent_states["y"] - agent_states["y"][agent_id]
+            relative_z = agent_states["z"] - agent_states["z"][agent_id]
+            relative_heading = (
+                agent_states["heading"] - agent_states["heading"][agent_id]
+            )
+            relative_v = agent_states["v"] - agent_states["v"][agent_id]
+            relative_heading = jnp.fmod(relative_heading + jnp.pi, 2 * jnp.pi) - jnp.pi
+
+            # Overwrite the first element with the absolute value of the ego agent
+            relative_x = relative_x.at[agent_id].set(agent_states["x"][agent_id])
+            relative_y = relative_y.at[agent_id].set(agent_states["y"][agent_id])
+            relative_z = relative_z.at[agent_id].set(agent_states["z"][agent_id])
+            relative_heading = relative_heading.at[agent_id].set(
+                agent_states["heading"][agent_id]
+            )
+            relative_v = relative_v.at[agent_id].set(agent_states["v"][agent_id])
 
             vector_obs = jnp.stack(
                 [
-            # ego obs
-            0.1 * seen[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.1 * (seen * agent_states_relative_team)[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.01 * (seen * agent_states_relative_x)[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.01 * (seen * agent_states_relative_y)[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.01 * (seen * agent_states_relative_z)[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.05 * (seen * agent_states_relative_heading)[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.01 * (seen * agent_states_relative_v)[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.1 * (seen * agent_states["health"])[sorted_indices].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
-            0.01 * agent_states["box_position"].at[:self.max_agent_can_be_seen_in_vec_obs].get(),
+                    # ego obs
+                    seen[sorted_indices].at[: self.max_agent_in_vec_obs].get(),
+                    (seen * relative_team)[sorted_indices]
+                    .at[: self.max_agent_in_vec_obs]
+                    .get(),
+                    (seen * relative_x)[sorted_indices]
+                    .at[: self.max_agent_in_vec_obs]
+                    .get()
+                    / self.limits[0],
+                    (seen * relative_y)[sorted_indices]
+                    .at[: self.max_agent_in_vec_obs]
+                    .get()
+                    / self.limits[1],
+                    (seen * relative_z)[sorted_indices]
+                    .at[: self.max_agent_in_vec_obs]
+                    .get()
+                    / self.z_max,
+                    (seen * relative_heading)[sorted_indices]
+                    .at[: self.max_agent_in_vec_obs]
+                    .get(),
+                    (seen * relative_v)[sorted_indices]
+                    .at[: self.max_agent_in_vec_obs]
+                    .get()
+                    / jnp.sqrt(jnp.square(self.limits[0]) + jnp.square(self.limits[1])),
+                    # normalize by diagonal of the map
+                    (seen * agent_states["health"])[sorted_indices]
+                    .at[: self.max_agent_in_vec_obs]
+                    .get(),
                 ],
                 axis=1,  # stack along the second dimension
             )
             vector_obs = vector_obs.flatten()
+
+            boxes = self._maps[map_state["map_idx"]]
+            # normalize
+            boxes = boxes / jnp.array(
+                [[self.limits[0], self.limits[1], self.limits[0], self.limits[1]]]
+            )
+            # append boxes to the end of the vector
+            vector_obs = jnp.concatenate(
+                [
+                    vector_obs,
+                    boxes.flatten(),
+                ]
+            )
             # now obs of ego is at the beginning of the vector
             # obs other agents are consecutive and sorted by distance from ego
 
@@ -685,7 +747,6 @@ class GigastepEnv:
 
         health = jnp.ones((self.n_agents,), dtype=jnp.float32)
         alive = jnp.ones((self.n_agents,), dtype=jnp.float32)
-        box_position = jnp.ones((self.n_agents,), dtype=jnp.float32) * -1
         agent_state = {
             "x": x,
             "y": y,
@@ -699,7 +760,6 @@ class GigastepEnv:
             "max_health": self._per_agent_max_health,
             "max_thrust": self._per_agent_thrust,
             "sprite": self._per_agent_sprites,
-            "box_position": box_position,
         }
 
         state = (agent_state, map_state)

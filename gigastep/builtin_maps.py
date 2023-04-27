@@ -125,7 +125,7 @@ def get_builtin_maps(maps, limits):
     list_of_maps = jnp.stack(maps, axis=0)
 
     # maps are defined in [0,10]x[0,10] but we want to render them in [0,limits[0]]x[0,limits[1]]
-    normalizer = jnp.array([[10, 10, 10, 10]])
+    normalizer = jnp.array([[[10, 10, 10, 10]]])
     de_normalizer = jnp.array([[limits[0], limits[1], limits[0], limits[1]]])
     list_of_maps = list_of_maps / normalizer
     list_of_maps = list_of_maps * de_normalizer

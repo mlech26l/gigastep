@@ -558,7 +558,7 @@ class GigastepEnv:
 
             sorted_indices = jnp.argsort(ranking).flatten()
             # State vector obs are relative to the ego agent
-            relative_team = agent_states["team"] - agent_states["team"][agent_id]
+            relative_team = (agent_states["team"] == agent_states["team"][agent_id]).astype(jnp.float32)
             relative_x = agent_states["x"] - agent_states["x"][agent_id]
             relative_y = agent_states["y"] - agent_states["y"][agent_id]
             relative_z = agent_states["z"] - agent_states["z"][agent_id]

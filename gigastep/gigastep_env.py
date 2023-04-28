@@ -76,9 +76,9 @@ def draw_agents_from_ego(obs, x, y, z, teams, seen, agent_id, sprite):
 class GigastepEnv:
     def __init__(
         self,
-        very_close_cone_depth=0.7,
+        very_close_cone_depth=1.0,
         cone_depth=3.5,
-        cone_angle=jnp.pi / 4,
+        cone_angle=jnp.pi / 2,
         damage_per_second=3,
         healing_per_second=0.3,
         use_stochastic_obs=True,
@@ -98,7 +98,7 @@ class GigastepEnv:
         per_agent_range=None,
         per_agent_team=None,
         tagged_penalty=5,
-        team_reward= 0,
+        team_reward=0,
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
@@ -390,7 +390,7 @@ class GigastepEnv:
         # Check if agents are dead
         alive = alive * (health > 0)
         # Reward is proportional to the number of agents seen minus number of seen itself
-        reward = jnp.exp((detected_other_agent - seen) * self.time_delta) * alive
+        reward = jnp.exp((2 * detected_other_agent - seen) * self.time_delta) * alive
         # Penalize for collisions or going out of bounds
         reward = (
             reward
@@ -412,6 +412,7 @@ class GigastepEnv:
             )
             * alive
         )
+        reward = reward - 0.01  # penalize idle agents
 
         # Check if episode is done (all agents of one team dead)
         alive_team1 = jnp.sum(alive * (teams == 0))
@@ -792,10 +793,17 @@ class GigastepEnv:
             new_states,
             states,
         )
-        if len(obs.shape)==3:
+        if self._obs_type == "vector":
             obs = jnp.where(ep_dones.reshape(batch_size, 1, 1), new_obs, obs)
-        else:
+        elif self._obs_type == "rgb":
             obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, obs)
+        else:
+            # "vector_rgb" -> obs is a tuple of (obs0, obs1)
+            obs0 = jnp.where(
+                ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs[0], obs[0]
+            )
+            obs1 = jnp.where(ep_dones.reshape(batch_size, 1, 1), new_obs[1], obs[1])
+            obs = (obs0, obs1)
         return reset_states, obs
 
     @classmethod

@@ -389,38 +389,36 @@ class GigastepEnv:
 
         # Check if agents are dead
         alive = alive * (health > 0)
-        # Reward is proportional to the number of agents seen minus number of seen itself
-        reward = jnp.exp((2 * detected_other_agent - seen) * self.time_delta) * alive
-        # Penalize for collisions or going out of bounds
-        reward = (
-            reward
-            + 0.1
-            * jnp.exp(
-                -10
-                * (collided + out_of_bounds + hit_box)
-                * self.collision_penalty
-                * alive
-            )
-            * alive
-        )
-        # Penalize for being tagged
-        reward = (
-            reward
-            + 0.1
-            * jnp.exp(
-                -10 * (health <= 0).astype(jnp.float32) * alive * self.tagged_penalty
-            )
-            * alive
-        )
-        reward = reward - 0.01  # penalize idle agents
 
         # Check if episode is done (all agents of one team dead)
         alive_team1 = jnp.sum(alive * (teams == 0))
         alive_team2 = jnp.sum(alive * (teams == 1))
         episode_done = (alive_team1 == 0) | (alive_team2 == 0)
 
-        # Reward the team with more live agents
-        reward = reward * (1 - self.team_reward) / 5
+        ### REWARDS ###
+        # Positive reward for detecting other agents
+        reward = detected_other_agent * self.time_delta * alive
+
+        # Negative reward for being detected (weighted less than detecting to encourage exploration)
+        reward = reward - 0.5 * seen * self.time_delta * alive
+
+        # Negative reward for collisions, going out of bounds and hitting boxes
+        reward = (
+            reward
+            - (collided + out_of_bounds + hit_box) * self.collision_penalty * alive
+        )
+        # Negative reward for dying (health drops to 0)
+        reward = (
+            reward - (health <= 0).astype(jnp.float32) * self.tagged_penalty * alive
+        )
+        # Negative reward for being idle
+        reward = reward - 0.01 * self.time_delta * alive
+
+        # Positive reward for winning the game
+        reward = reward + 20 * (alive_team2 == 0) * (teams == 0) * alive
+        reward = reward + 20 * (alive_team1 == 0) * (teams == 1) * alive
+
+        # TODO: add reward other rewards here for disabling other agents and exploration here
 
         agent_states = {
             "x": x,

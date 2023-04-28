@@ -1,7 +1,8 @@
 import os
-os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
+
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import jax
 import jax.numpy as jnp
@@ -18,8 +19,7 @@ import numpy as np
 
 
 def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
-
-    if net_type=="CNN":
+    if net_type == "CNN":
         network = NetworkMapperGiga["CNN"](
             depth_1=1,
             depth_2=1,
@@ -45,20 +45,20 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
         train_evaluator.set_apply_fn(network.apply)
         test_evaluator.set_apply_fn(network.apply)
 
-    elif net_type=="LSTM_CNN":
+    elif net_type == "LSTM_CNN":
         network = NetworkMapperGiga["LSTM_CNN"](
             # CNN
             num_output_units_cnn=64,
             depth_1=1,
             depth_2=1,
-            features_1=32,
-            features_2=64,
+            features_1=64,
+            features_2=96,
             kernel_1=8,
             kernel_2=4,
             strides_1=2,
             strides_2=1,
             num_linear_layers_cnn=1,
-            num_hidden_units_cnn=64,
+            num_hidden_units_cnn=128,
             output_activation_cnn="identity",
             # LSTM
             num_hidden_units_lstm=64,
@@ -77,7 +77,7 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
 
         train_evaluator.set_apply_fn(network.apply, network.initialize_carry)
         test_evaluator.set_apply_fn(network.apply, network.initialize_carry)
-      
+
     else:
         raise NotImplementedError
 
@@ -85,22 +85,28 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
 
 
 def run_gigastep_fitness(
-  scenario_name: str = "identical_5_vs_5", 
-  network_type: str = "LSTM_CNN"
-  ):
+    scenario_name: str = "identical_5_vs_5", network_type: str = "LSTM_CNN"
+):
     num_generations = 1000
     evaluate_every_gen = 10
     log_tensorboard = True
 
     if log_tensorboard:
         from torch.utils.tensorboard import SummaryWriter
-        logdir = './logdir/evosax/open_es/' + datetime.now().strftime("%y_%m_%d_%H_%M_%S")
+
+        logdir = "./logdir/evosax/open_es/" + datetime.now().strftime(
+            "%y_%m_%d_%H_%M_%S"
+        )
         writer = SummaryWriter(log_dir=logdir, flush_secs=10)
 
     rng = jax.random.PRNGKey(0)
 
-    train_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=False)
-    test_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=True, n_devices=1)
+    train_evaluator = GigastepFitness(
+        scenario_name, num_env_steps=500, num_rollouts=20, test=False
+    )
+    test_evaluator = GigastepFitness(
+        scenario_name, num_env_steps=500, num_rollouts=20, test=True, n_devices=1
+    )
 
     # Initialize network depending on type
     out = network_setup(train_evaluator, test_evaluator, rng, net_type=network_type)
@@ -111,7 +117,9 @@ def run_gigastep_fitness(
 
     # fitness_shaper = FitnessShaper(maximize=True)
 
-    strategy = OpenES(popsize=30, num_dims=train_param_reshaper.total_params, maximize=True)
+    strategy = OpenES(
+        popsize=30, num_dims=train_param_reshaper.total_params, maximize=True
+    )
     es_state = strategy.initialize(rng)
 
     es_logging = ESLog(
@@ -127,13 +135,15 @@ def run_gigastep_fitness(
     t = tqdm.tqdm(range(1, num_generations + 1), desc="Open-ES", leave=True)
     for gen in t:
         rng, rng_gen, rng_eval = jax.random.split(rng, 3)
-        
+
         # Sample parameters for the ego team
         x, es_state = strategy.ask(rng_gen, es_state)
         x_re = train_param_reshaper.reshape(x)
 
         # Get mean parameters for the ado team
-        x_mean = jnp.repeat(es_state.mean[None], x.shape[0], 0)  # TODO: check if repeat can be removed
+        x_mean = jnp.repeat(
+            es_state.mean[None], x.shape[0], 0
+        )  # TODO: check if repeat can be removed
         x_mean_re = train_param_reshaper.reshape(x_mean)
 
         # Rollout fitness and update parameter distribution
@@ -147,8 +157,8 @@ def run_gigastep_fitness(
         if log_tensorboard:
             for key, value in es_log.items():
                 if not "params" in key:
-                    val = value[gen-1] if len(value.shape) else value
-                    writer.add_scalar('train/' + key, np.array(val), gen)
+                    val = value[gen - 1] if len(value.shape) else value
+                    writer.add_scalar("train/" + key, np.array(val), gen)
 
         # Sporadically evaluate the mean & best performance on test evaluator.
         if (gen + 1) % evaluate_every_gen == 0:
@@ -160,7 +170,9 @@ def run_gigastep_fitness(
             x_test = jnp.stack([best_params, mean_params], axis=0)
             x_test_re = test_param_reshaper.reshape(x_test)
 
-            x_mean_test = jnp.repeat(es_state.mean[None], x_test.shape[0], 0)  # TODO: check if repeat can be removed
+            x_mean_test = jnp.repeat(
+                es_state.mean[None], x_test.shape[0], 0
+            )  # TODO: check if repeat can be removed
             x_mean_test_re = train_param_reshaper.reshape(x_mean_test)
 
             test_scores, test_images_global, test_images_ego = test_evaluator.rollout(
@@ -173,26 +185,28 @@ def run_gigastep_fitness(
                 id_prm = 0
                 id_run = 0
                 id_ego = 0
-                frames_ego = np.array(test_images_ego[id_prm, id_run, :, id_ego])  # NOTE: this for agent-specific obs
+                frames_ego = np.array(
+                    test_images_ego[id_prm, id_run, :, id_ego]
+                )  # NOTE: this for agent-specific obs
                 frames_glb = np.array(test_images_global[id_prm, id_run])
 
                 frames_ego = np.transpose(frames_ego, (0, 3, 1, 2))  # (T, C, W, H)
-                frames_ego = np.expand_dims(frames_ego, axis=0)      # (N, T, C, W, H)
+                frames_ego = np.expand_dims(frames_ego, axis=0)  # (N, T, C, W, H)
                 writer.add_video("test/video-ego", frames_ego, global_step=gen, fps=15)
 
                 frames_glb = np.transpose(frames_glb, (0, 3, 1, 2))  # (T, C, W, H)
-                frames_glb = np.expand_dims(frames_glb, axis=0)      # (N, T, C, W, H)
+                frames_glb = np.expand_dims(frames_glb, axis=0)  # (N, T, C, W, H)
                 writer.add_video("test/video-all", frames_glb, global_step=gen, fps=15)
-            
+
             test_return_to_log = test_scores[1]
             log_steps.append(train_evaluator.total_env_steps)
             log_return.append(test_return_to_log)
             t.set_description(f"R: " + "{:.3f}".format(test_return_to_log.item()))
             t.refresh()
-    
+
 
 if __name__ == "__main__":
     t_start = time.time()
     run_gigastep_fitness("identical_5_vs_5", "LSTM_CNN")
     t_end = time.time()
-    print("Runtime = " + str(round(t_end-t_start, 3)))
+    print("Runtime = " + str(round(t_end - t_start, 3)))

@@ -86,6 +86,7 @@ _builtin_scenarios = {
     "identical_20_vs_20": {
         "team_0": {"default": 20},
         "team_1": {"default": 20},
+        "map": "empty",
     },
     "special_20_vs_20": {
         "team_0": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
@@ -94,6 +95,7 @@ _builtin_scenarios = {
     "identical_10_vs_10": {
         "team_0": {"default": 10},
         "team_1": {"default": 10},
+        "map": "empty",
     },
     "special_10_vs_10": {
         "team_0": {"tank": 3, "sniper": 3, "scout": 3, "default": 1},
@@ -102,6 +104,7 @@ _builtin_scenarios = {
     "identical_5_vs_5": {
         "team_0": {"default": 5},
         "team_1": {"default": 5},
+        "map": "empty",
     },
     "special_5_vs_5": {
         "team_0": {"tank": 1, "sniper": 1, "scout": 1, "default": 2},

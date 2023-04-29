@@ -223,6 +223,9 @@ class GigastepEnv:
         self._v_step_agents = jax.vmap(self._step_agents)
         self.v_step = jax.vmap(self.step)
         self.v_reset = jax.vmap(self.reset)
+        self.v_set_aux_reward_factor = jax.vmap(
+            self.set_aux_reward_factor, in_axes=(0, None)
+        )
         if jit:
             self.v_reset = jax.jit(self.v_reset)
             self.v_step = jax.jit(self.v_step)
@@ -766,6 +769,12 @@ class GigastepEnv:
         return obs
 
     @partial(jax.jit, static_argnums=(0,))
+    def set_aux_reward_factor(self, state, aux_rewards_factor):
+        agent_states, map_states = state
+        map_states["aux_rewards_factor"] = aux_rewards_factor
+        return (agent_states, map_states)
+
+    @partial(jax.jit, static_argnums=(0,))
     def reset(self, rng):
         rng = jax.random.split(rng, 7)
 
@@ -775,6 +784,7 @@ class GigastepEnv:
             "map_idx": map_idx,
             "waypoint_location": jnp.zeros(4),
             "waypoint_enabled": jnp.float32(0),
+            "aux_rewards_factor": jnp.float32(1),
         }
 
         x = jax.random.uniform(

@@ -89,7 +89,7 @@ def run_gigastep_fitness(
   network_type: str = "LSTM_CNN"
   ):
     for s_name in strategy_name:
-        num_generations = 50
+        num_generations = 500
         evaluate_every_gen = 10
         log_tensorboard = True
 
@@ -110,9 +110,15 @@ def run_gigastep_fitness(
         train_param_reshaper = ParameterReshaper(net_params)
         test_param_reshaper = ParameterReshaper(net_params, n_devices=1)
 
-        strategy = Strategies[s_name](popsize=30, num_dims=train_param_reshaper.total_params, maximize=True)
+        if s_name=="DES":
+            strategy_params = {"popsize": 200, "sigma_init": 5.0}
+        else:
+            strategy_params = {"popsize": 10}
+
+        strategy = Strategies[s_name](**strategy_params, num_dims=train_param_reshaper.total_params, maximize=True)
         es_params = strategy.default_params
-        # es_params = es_params.replace(init_min=-2, init_max=2)
+        if s_name=="DES":
+            es_params = es_params.replace(lrate_mean=0.5, lrate_sigma=0.5, init_max=1.0)
         es_state = strategy.initialize(rng, es_params)
 
         es_logging = ESLog(
@@ -194,7 +200,7 @@ if __name__ == "__main__":
     t_start = time.time()
     run_gigastep_fitness(
         scenario_name="identical_5_vs_5", 
-        strategy_name=["OpenES", "DES", "CR_FM_NES"],
+        strategy_name=["DES"],  # ["OpenES", "DES", "CR_FM_NES"],
         network_type="LSTM_CNN")
     t_end = time.time()
     print("Runtime = " + str(round(t_end-t_start, 3)))

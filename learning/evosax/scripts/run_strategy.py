@@ -85,115 +85,116 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
 
 def run_gigastep_fitness(
   scenario_name: str = "identical_5_vs_5", 
-  strategy_name: str = "OpenES",
+  strategy_name: str = ["OpenES"],
   network_type: str = "LSTM_CNN"
   ):
-    num_generations = 50
-    evaluate_every_gen = 10
-    log_tensorboard = True
-
-    if log_tensorboard:
-        from torch.utils.tensorboard import SummaryWriter
-        logdir = './logdir/evosax/' + strategy_name.lower() + '/' + datetime.now().strftime("%y_%m_%d_%H_%M_%S")
-        writer = SummaryWriter(log_dir=logdir, flush_secs=10)
-
-    rng = jax.random.PRNGKey(0)
-
-    train_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=False)
-    test_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=True, n_devices=1)
-
-    # Initialize network depending on type
-    out = network_setup(train_evaluator, test_evaluator, rng, net_type=network_type)
-    (net_params, train_evaluator, test_evaluator) = out
-
-    train_param_reshaper = ParameterReshaper(net_params)
-    test_param_reshaper = ParameterReshaper(net_params, n_devices=1)
-
-    strategy = Strategies[strategy_name](popsize=30, num_dims=train_param_reshaper.total_params, maximize=True)
-    es_params = strategy.default_params
-    # es_params = es_params.replace(init_min=-2, init_max=2)
-    es_state = strategy.initialize(rng, es_params)
-
-    es_logging = ESLog(
-        num_dims=train_param_reshaper.total_params,
-        num_generations=num_generations,
-        top_k=5,
-        maximize=True,
-    )
-    es_log = es_logging.initialize()
-
-    # Run the ask-eval-tell loop
-    log_steps, log_return = [], []
-    t = tqdm.tqdm(range(1, num_generations + 1), desc=strategy_name, leave=True)
-    for gen in t:
-        rng, rng_gen, rng_eval = jax.random.split(rng, 3)
-        
-        # Sample parameters for the ego team
-        x, es_state = strategy.ask(rng_gen, es_state)
-        x_re = train_param_reshaper.reshape(x)
-
-        # Get mean parameters for the ado team
-        x_mean = jnp.repeat(es_state.mean[None], x.shape[0], 0)  # TODO: check if repeat can be removed
-        x_mean_re = train_param_reshaper.reshape(x_mean)
-
-        # Rollout fitness and update parameter distribution
-        scores = train_evaluator.rollout(rng_eval, x_re, x_mean_re)
-        es_state = strategy.tell(x, scores, es_state)
-
-        # Update the logging instance.
-        es_log = es_logging.update(es_log, x, scores)
+    for s_name in strategy_name:
+        num_generations = 50
+        evaluate_every_gen = 10
+        log_tensorboard = True
 
         if log_tensorboard:
-            for key, value in es_log.items():
-                if not "params" in key:
-                    val = value[gen-1] if len(value.shape) else value
-                    writer.add_scalar('train/' + key, np.array(val), gen)
+            from torch.utils.tensorboard import SummaryWriter
+            logdir = './logdir/evosax/' + s_name.lower() + '/' + datetime.now().strftime("%y_%m_%d_%H_%M_%S")
+            writer = SummaryWriter(log_dir=logdir, flush_secs=10)
 
-        # Sporadically evaluate the mean & best performance on test evaluator.
-        if (gen + 1) % evaluate_every_gen == 0:
-            rng, rng_test = jax.random.split(rng)
-            # Stack best params seen & mean strategy params for eval
-            best_params = es_log["top_params"][0]
-            mean_params = es_state.mean
+        rng = jax.random.PRNGKey(0)
 
-            x_test = jnp.stack([best_params, mean_params], axis=0)
-            x_test_re = test_param_reshaper.reshape(x_test)
+        train_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=False)
+        test_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=True, n_devices=1)
 
-            x_mean_test = jnp.repeat(es_state.mean[None], x_test.shape[0], 0)  # TODO: check if repeat can be removed
-            x_mean_test_re = train_param_reshaper.reshape(x_mean_test)
+        # Initialize network depending on type
+        out = network_setup(train_evaluator, test_evaluator, rng, net_type=network_type)
+        (net_params, train_evaluator, test_evaluator) = out
 
-            test_scores, test_images_global, test_images_ego = test_evaluator.rollout(
-                rng_test, x_test_re, x_mean_test_re
-            )
+        train_param_reshaper = ParameterReshaper(net_params)
+        test_param_reshaper = ParameterReshaper(net_params, n_devices=1)
+
+        strategy = Strategies[s_name](popsize=30, num_dims=train_param_reshaper.total_params, maximize=True)
+        es_params = strategy.default_params
+        # es_params = es_params.replace(init_min=-2, init_max=2)
+        es_state = strategy.initialize(rng, es_params)
+
+        es_logging = ESLog(
+            num_dims=train_param_reshaper.total_params,
+            num_generations=num_generations,
+            top_k=5,
+            maximize=True,
+        )
+        es_log = es_logging.initialize()
+
+        # Run the ask-eval-tell loop
+        log_steps, log_return = [], []
+        t = tqdm.tqdm(range(1, num_generations + 1), desc=s_name, leave=True)
+        for gen in t:
+            rng, rng_gen, rng_eval = jax.random.split(rng, 3)
+            
+            # Sample parameters for the ego team
+            x, es_state = strategy.ask(rng_gen, es_state)
+            x_re = train_param_reshaper.reshape(x)
+
+            # Get mean parameters for the ado team
+            x_mean = jnp.repeat(es_state.mean[None], x.shape[0], 0)  # TODO: check if repeat can be removed
+            x_mean_re = train_param_reshaper.reshape(x_mean)
+
+            # Rollout fitness and update parameter distribution
+            scores = train_evaluator.rollout(rng_eval, x_re, x_mean_re)
+            es_state = strategy.tell(x, scores, es_state)
+
+            # Update the logging instance.
+            es_log = es_logging.update(es_log, x, scores)
 
             if log_tensorboard:
-                ### Video
-                id_prm = 0
-                id_run = 0
-                id_ego = 0
-                frames_ego = np.array(test_images_ego[id_prm, id_run, :, id_ego])  # NOTE: this for agent-specific obs
-                frames_glb = np.array(test_images_global[id_prm, id_run])
+                for key, value in es_log.items():
+                    if not "params" in key:
+                        val = value[gen-1] if len(value.shape) else value
+                        writer.add_scalar('train/' + key, np.array(val), gen)
 
-                frames_ego = np.transpose(frames_ego, (0, 3, 1, 2))  # (T, C, W, H)
-                frames_ego = np.expand_dims(frames_ego, axis=0)      # (N, T, C, W, H)
-                writer.add_video("test/video-ego", frames_ego, global_step=gen, fps=15)
+            # Sporadically evaluate the mean & best performance on test evaluator.
+            if (gen + 1) % evaluate_every_gen == 0:
+                rng, rng_test = jax.random.split(rng)
+                # Stack best params seen & mean strategy params for eval
+                best_params = es_log["top_params"][0]
+                mean_params = es_state.mean
 
-                frames_glb = np.transpose(frames_glb, (0, 3, 1, 2))  # (T, C, W, H)
-                frames_glb = np.expand_dims(frames_glb, axis=0)      # (N, T, C, W, H)
-                writer.add_video("test/video-all", frames_glb, global_step=gen, fps=15)
-            
-            test_return_to_log = test_scores[1]
-            log_steps.append(train_evaluator.total_env_steps)
-            log_return.append(test_return_to_log)
-            t.set_description(f"R: " + "{:.3f}".format(test_return_to_log.item()))
-            t.refresh()
-    
+                x_test = jnp.stack([best_params, mean_params], axis=0)
+                x_test_re = test_param_reshaper.reshape(x_test)
+
+                x_mean_test = jnp.repeat(es_state.mean[None], x_test.shape[0], 0)  # TODO: check if repeat can be removed
+                x_mean_test_re = train_param_reshaper.reshape(x_mean_test)
+
+                test_scores, test_images_global, test_images_ego = test_evaluator.rollout(
+                    rng_test, x_test_re, x_mean_test_re
+                )
+
+                if log_tensorboard:
+                    ### Video
+                    id_prm = 0
+                    id_run = 0
+                    id_ego = 0
+                    frames_ego = np.array(test_images_ego[id_prm, id_run, :, id_ego])  # NOTE: this for agent-specific obs
+                    frames_glb = np.array(test_images_global[id_prm, id_run])
+
+                    frames_ego = np.transpose(frames_ego, (0, 3, 1, 2))  # (T, C, W, H)
+                    frames_ego = np.expand_dims(frames_ego, axis=0)      # (N, T, C, W, H)
+                    writer.add_video("test/video-ego", frames_ego, global_step=gen, fps=15)
+
+                    frames_glb = np.transpose(frames_glb, (0, 3, 1, 2))  # (T, C, W, H)
+                    frames_glb = np.expand_dims(frames_glb, axis=0)      # (N, T, C, W, H)
+                    writer.add_video("test/video-all", frames_glb, global_step=gen, fps=15)
+                
+                test_return_to_log = test_scores[1]
+                log_steps.append(train_evaluator.total_env_steps)
+                log_return.append(test_return_to_log)
+                t.set_description(f"R: " + "{:.3f}".format(test_return_to_log.item()))
+                t.refresh()
+        
 
 if __name__ == "__main__":
     t_start = time.time()
     run_gigastep_fitness(
         scenario_name="identical_5_vs_5", 
-        strategy_name="DES",
+        strategy_name=["OpenES", "DES", "CR_FM_NES"],
         network_type="LSTM_CNN")
     t_end = time.time()
     print("Runtime = " + str(round(t_end-t_start, 3)))

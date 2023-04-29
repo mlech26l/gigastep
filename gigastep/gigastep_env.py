@@ -448,6 +448,7 @@ class GigastepEnv:
             "map_idx": map_state["map_idx"],
             "waypoint_location": waypoint_location,
             "waypoint_enabled": waypoint_enabled,
+            "aux_rewards_factor": map_state["aux_rewards_factor"],
         }
 
         ### REWARDS ###
@@ -457,22 +458,28 @@ class GigastepEnv:
 
         # Negative reward for being detected (weighted less than detecting to encourage exploration)
         reward = reward - 0.5 * seen * self.time_delta * alive
-
-        # Negative reward for collisions, going out of bounds and hitting boxes
-        reward = (
-            reward
-            - (collided + out_of_bounds + hit_box) * self.collision_penalty * alive
-        )
-        # Negative reward for dying (health drops to 0)
-        reward = (
-            reward - (health <= 0).astype(jnp.float32) * self.tagged_penalty * alive
-        )
         # Negative reward for being idle
         reward = reward - 0.01 * self.time_delta * alive
 
-        # Positive reward for winning the game
-        reward = reward + 20 * (alive_team2 == 0) * (teams == 0) * alive
-        reward = reward + 20 * (alive_team1 == 0) * (teams == 1) * alive
+        # Negative reward for collisions, going out of bounds and hitting boxes
+        # Negative reward for dying (health drops to 0)
+        game_over_reward = (
+            -(collided + out_of_bounds + hit_box + (health <= 0).astype(jnp.float32))
+            * self.collision_penalty
+            * alive
+        )
+        # Positive reward for winning the game (weighted by number of agents)
+        game_won_reward = (
+            self.n_agents * (alive_team2 == 0) * (teams == 0) * alive
+            + self.n_agents * (alive_team1 == 0) * (teams == 1) * alive
+        )
+        # Enable curriculum learning by scaling the auxiliary reward
+        # if aux factor is set to zero only the end of the winning/loosing of the game will give a reward
+        reward = (
+            map_state["aux_rewards_factor"] * reward
+            + game_won_reward
+            + game_over_reward
+        )
 
         # TODO: add reward other rewards here for disabling other agents and exploration here
 

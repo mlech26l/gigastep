@@ -463,25 +463,22 @@ class GigastepEnv:
 
         # Negative reward for collisions, going out of bounds and hitting boxes
         # Negative reward for dying (health drops to 0)
-        game_over_reward = (
-            -(collided + out_of_bounds + hit_box + (health <= 0).astype(jnp.float32))
+        reward = (
+            reward
+            - (collided + out_of_bounds + hit_box + (health <= 0).astype(jnp.float32))
             * self.collision_penalty
             * alive
         )
+        # TODO: add reward other rewards here for disabling other agents and exploration here
+
         # Positive reward for winning the game (weighted by number of agents)
         game_won_reward = (
             self.n_agents * (alive_team2 == 0) * (teams == 0) * alive
             + self.n_agents * (alive_team1 == 0) * (teams == 1) * alive
         )
         # Enable curriculum learning by scaling the auxiliary reward
-        # if aux factor is set to zero only the end of the winning/loosing of the game will give a reward
-        reward = (
-            map_state["aux_rewards_factor"] * reward
-            + game_won_reward
-            + game_over_reward
-        )
-
-        # TODO: add reward other rewards here for disabling other agents and exploration here
+        # if aux factor is set to zero only the end of the winning of the game will give a reward
+        reward = map_state["aux_rewards_factor"] * reward + game_won_reward
 
         agent_states = {
             "x": x,

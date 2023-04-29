@@ -138,6 +138,13 @@ _builtin_scenarios = {
 
 
 def make_scenario(name, **kwargs):
+    """Instantiates a GigastepEnv by the name of the built-in scenarios
+
+
+    :param name: Name of the scenario. Use ``gigastep.list_scenarios()`` to get a list of all availabel scenarios
+    :param kwargs: Named arguments will be passed to the GigastepEnv constructor (__init__)
+    :return: A GigastepEnv object
+    """
     if name not in _builtin_scenarios.keys():
         raise ValueError(f"Scenario {name} not found.")
 

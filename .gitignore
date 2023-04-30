@@ -2,6 +2,8 @@ learning/MARLlib/exp_results/
 learning/MARLlib/results/
 video
 logdir
+.vscode/
+testing/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -60,7 +60,7 @@ class ScenarioBuilder:
         return GigastepEnv(**scenario_args)
 
     def get_kwargs(self):
-        return {
+        kwargs = {
             "n_agents": len(self._per_agent_team),
             "per_agent_team": jnp.array(self._per_agent_team),
             "per_agent_sprites": jnp.array(self._per_agent_sprites),
@@ -68,9 +68,11 @@ class ScenarioBuilder:
             "per_agent_range": jnp.array(self._per_agent_range),
             "per_agent_thrust": jnp.array(self._per_agent_thrust),
             "maps": self._map,
-            "limit_x": self._map_size[0] if self._map_size is not None else None,
-            "limit_y": self._map_size[1] if self._map_size is not None else None,
         }
+        if self._map_size is not None:
+            kwargs["limit_x"] = self._map_size[0]
+            kwargs["limit_y"] = self._map_size[1]
+        return kwargs
 
     @classmethod
     def from_config(cls, config):

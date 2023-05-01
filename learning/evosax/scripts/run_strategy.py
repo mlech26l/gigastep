@@ -47,7 +47,7 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
     elif net_type=="LSTM_CNN":
         network = NetworkMapperGiga["LSTM_CNN"](
             # CNN
-            num_output_units_cnn=64,
+            num_output_units_cnn=128,  # 64,
             depth_1=1,
             depth_2=1,
             features_1=32,
@@ -62,7 +62,7 @@ def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
             # LSTM
             num_hidden_units_lstm=64,
             num_output_units_lstm=3,
-            output_activation_lstm="gaussian",
+            output_activation_lstm="tanh_gaussian",
         )
         # Channel last configuration for conv!
         pholder = jnp.zeros((1, *train_evaluator.env.resolution, 3))
@@ -89,8 +89,10 @@ def run_gigastep_fitness(
   network_type: str = "LSTM_CNN"
   ):
     for s_name in strategy_name:
-        num_generations = 500
+        num_generations = 100
         evaluate_every_gen = 10
+        update_ado_freq = 10
+
         log_tensorboard = True
 
         if log_tensorboard:
@@ -110,16 +112,22 @@ def run_gigastep_fitness(
         train_param_reshaper = ParameterReshaper(net_params)
         test_param_reshaper = ParameterReshaper(net_params, n_devices=1)
 
+        strategy_params = {}
+        strategy_params["centered_rank"] = True
+        strategy_params["popsize"] = 32
         if s_name=="DES":
-            strategy_params = {"popsize": 200, "sigma_init": 5.0}
+            strategy_params["sigma_init"] = 5.0
+        if s_name=="PGPE":
+            strategy_params["elite_ratio"] = 1.0
         else:
-            strategy_params = {"popsize": 10}
+            pass
 
         strategy = Strategies[s_name](**strategy_params, num_dims=train_param_reshaper.total_params, maximize=True)
         es_params = strategy.default_params
         if s_name=="DES":
             es_params = es_params.replace(lrate_mean=0.5, lrate_sigma=0.5, init_max=1.0)
         es_state = strategy.initialize(rng, es_params)
+        es_state_mean = es_state.mean.copy()
 
         es_logging = ESLog(
             num_dims=train_param_reshaper.total_params,
@@ -140,7 +148,9 @@ def run_gigastep_fitness(
             x_re = train_param_reshaper.reshape(x)
 
             # Get mean parameters for the ado team
-            x_mean = jnp.repeat(es_state.mean[None], x.shape[0], 0)  # TODO: check if repeat can be removed
+            if gen % update_ado_freq == 0:
+                es_state_mean = es_state.mean.copy()
+            x_mean = jnp.repeat(es_state_mean[None], x.shape[0], 0)  # TODO: check if repeat can be removed
             x_mean_re = train_param_reshaper.reshape(x_mean)
 
             # Rollout fitness and update parameter distribution
@@ -166,7 +176,7 @@ def run_gigastep_fitness(
                 x_test = jnp.stack([best_params, mean_params], axis=0)
                 x_test_re = test_param_reshaper.reshape(x_test)
 
-                x_mean_test = jnp.repeat(es_state.mean[None], x_test.shape[0], 0)  # TODO: check if repeat can be removed
+                x_mean_test = jnp.repeat(es_state_mean[None], x_test.shape[0], 0)  # TODO: check if repeat can be removed
                 x_mean_test_re = train_param_reshaper.reshape(x_mean_test)
 
                 test_scores, test_images_global, test_images_ego = test_evaluator.rollout(
@@ -199,8 +209,8 @@ def run_gigastep_fitness(
 if __name__ == "__main__":
     t_start = time.time()
     run_gigastep_fitness(
-        scenario_name="identical_5_vs_5", 
-        strategy_name=["DES"],  # ["OpenES", "DES", "CR_FM_NES"],
+        scenario_name="identical_10_vs_10", 
+        strategy_name=["OpenES"],  # ["OpenES", "DES", "CR_FM_NES"],
         network_type="LSTM_CNN")
     t_end = time.time()
     print("Runtime = " + str(round(t_end-t_start, 3)))

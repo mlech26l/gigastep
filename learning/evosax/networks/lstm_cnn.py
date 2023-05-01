@@ -10,6 +10,7 @@ from evosax.networks.shared import (
     default_bias_init,
     kernel_init_fn,
 )
+from learning.evosax.networks.shared import tanh_gaussian_out
 from evosax.networks.cnn import CNN
 
 
@@ -85,6 +86,10 @@ class LSTM_CNN(nn.Module):
             )
         elif self.output_activation_lstm == "gaussian":
             x = gaussian_out(
+                rng_lstm, x, self.num_output_units_lstm, self.kernel_init_type_lstm
+            )
+        elif self.output_activation_lstm == "tanh_gaussian":
+            x = tanh_gaussian_out(
                 rng_lstm, x, self.num_output_units_lstm, self.kernel_init_type_lstm
             )
         return lstm_state, x

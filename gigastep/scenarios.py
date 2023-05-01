@@ -10,11 +10,14 @@ class ScenarioBuilder:
         self._per_agent_range = []
         self._per_agent_thrust = []
         self._map = "all"
+        self._map_size = None
 
-    def set_map(self, map):
+    def set_map(self, map, map_size=None):
         if map not in ("all", "empty"):
             raise ValueError(f"Unknown map {map}")
         self._map = map
+        if map_size is not None:
+            self._map_size = map_size
 
     def add(
         self,
@@ -65,6 +68,8 @@ class ScenarioBuilder:
             "per_agent_range": jnp.array(self._per_agent_range),
             "per_agent_thrust": jnp.array(self._per_agent_thrust),
             "maps": self._map,
+            "limit_x": self._map_size[0] if self._map_size is not None else None,
+            "limit_y": self._map_size[1] if self._map_size is not None else None,
         }
 
     @classmethod
@@ -78,7 +83,8 @@ class ScenarioBuilder:
                 builder.add_type(1, agents_type)
 
         map = config.get("map", "all")
-        builder.set_map(map)
+        map_size = config.get("map_size", None)
+        builder.set_map(map, map_size)
         return builder
 
 
@@ -87,10 +93,12 @@ _builtin_scenarios = {
         "team_0": {"default": 20},
         "team_1": {"default": 20},
         "map": "empty",
+        "map_size": (20, 20),
     },
     "special_20_vs_20": {
         "team_0": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
         "team_1": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
+        "map_size": (20, 20),
     },
     "identical_10_vs_10": {
         "team_0": {"default": 10},

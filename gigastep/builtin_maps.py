@@ -9,8 +9,8 @@ import numpy as onp
 _builtin_maps = {
     "empty": {
         "boxes": jnp.zeros((0, 4), dtype=jnp.float32),
-        "start_pos_team_a": jnp.array([0, 0, 10, 3], dtype=jnp.float32),
-        "start_pos_team_b": jnp.array([0, 7, 10, 10], dtype=jnp.float32),
+        "start_pos_team_a": jnp.array([0, 0, 3, 10], dtype=jnp.float32),
+        "start_pos_team_b": jnp.array([7, 0, 10, 10], dtype=jnp.float32),
         "start_height": jnp.array([0, 0], dtype=jnp.float32),
         "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
         "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
@@ -151,7 +151,7 @@ def get_builtin_maps(maps, limits):
         maps_start_pos_a.append(v["start_pos_team_a"])
         maps_start_pos_b.append(v["start_pos_team_b"])
         maps_heading_a.append(v["start_heading_team_a"])
-        maps_heading_b.append(v["start_heading_team_a"])
+        maps_heading_b.append(v["start_heading_team_b"])
         maps_start_height.append(v["start_height"])
 
     maps_boxes = jnp.stack(maps_boxes, axis=0)

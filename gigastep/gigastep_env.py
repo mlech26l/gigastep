@@ -149,7 +149,6 @@ class GigastepEnv:
         self._per_agent_team = per_agent_team
 
         self.limits = (limit_x, limit_y)
-        self.z_min = 1
         self.z_max = 10
         self.resolution = (resolution_x, resolution_y)
         self.time_delta = 0.1
@@ -157,11 +156,11 @@ class GigastepEnv:
         self._maps = get_builtin_maps(maps, self.limits)
         # maps need to be prerendered because range indexing is not supported in jax.jit
         self._prerendered_maps = prerender_maps(
-            self._maps, self.resolution, self.limits
+            self._maps["boxes"], self.resolution, self.limits
         )
 
         # How many variables we need to represent the map
-        map_obs_len = 4 * self._maps.shape[1]
+        map_obs_len = 4 * self._maps["boxes"].shape[1]
         if obs_type == "rgb":
             self.observation_space = Box(
                 low=jnp.zeros(
@@ -271,7 +270,7 @@ class GigastepEnv:
         x = state["x"] + self.time_delta * vx * alive
         y = state["y"] + self.time_delta * vy * alive
         z = state["z"] + self.time_delta * vz * alive
-        z = jnp.clip(z, self.z_min, self.z_max)
+        z = jnp.clip(z, 0, self.z_max)
 
         z_delta = state["z"] - z
         v_new = jnp.sqrt(
@@ -295,7 +294,7 @@ class GigastepEnv:
         }
         return next_state
 
-    # @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=(0,))
     def step(self, states, actions, rng):
         v_step = jax.vmap(self._step_agents)
 
@@ -372,7 +371,7 @@ class GigastepEnv:
 
         ### Map obstacles collision check ###
         # A box is an array of [x1, y1, x2, y2]
-        boxes = self._maps[map_state["map_idx"]]
+        boxes = self._maps["boxes"][map_state["map_idx"]]
         hit_box = (
             (x[:, None] > boxes[None, :, 0])
             & (x[:, None] < boxes[None, :, 2])
@@ -546,9 +545,7 @@ class GigastepEnv:
         if "rgb" in self._obs_type:
             x = jnp.round(x * self.resolution[0] / self.limits[0]).astype(jnp.int32)
             y = jnp.round(y * self.resolution[1] / self.limits[1]).astype(jnp.int32)
-            z = jnp.round((z - self.z_min) * 255 / (self.z_max - self.z_min)).astype(
-                jnp.uint8
-            )
+            z = jnp.round(z * 255 / self.z_max).astype(jnp.uint8)
             # alive = alive.astype(jnp.uint8)
             teams = teams.astype(jnp.uint8)
             rgb_obs = self._prerendered_maps[map_state["map_idx"]]
@@ -700,7 +697,7 @@ class GigastepEnv:
             )
             vector_obs = vector_obs.flatten()
 
-            boxes = self._maps[map_state["map_idx"]]
+            boxes = self._maps["boxes"][map_state["map_idx"]]
             # normalize
             box_normalizer = jnp.array(
                 [[self.limits[0], self.limits[1], self.limits[0], self.limits[1]]]
@@ -744,9 +741,7 @@ class GigastepEnv:
         # x, y, z, v, heading, health, seen, alive, teams = states.T
         x = jnp.round(x * self.resolution[0] / self.limits[0]).astype(jnp.int32)
         y = jnp.round(y * self.resolution[1] / self.limits[1]).astype(jnp.int32)
-        z = jnp.round((z - self.z_min) * 255 / (self.z_max - self.z_min)).astype(
-            jnp.uint8
-        )
+        z = jnp.round(z * 255 / self.z_max).astype(jnp.uint8)
         alive = alive.astype(jnp.uint8)
         teams = teams.astype(jnp.uint8)
         obs = self._prerendered_maps[map_state["map_idx"]]
@@ -778,7 +773,7 @@ class GigastepEnv:
         map_states["aux_rewards_factor"] = aux_rewards_factor
         return (agent_states, map_states)
 
-    @partial(jax.jit, static_argnums=(0,))
+    # @partial(jax.jit, static_argnums=(0,))
     def reset(self, rng):
         rng = jax.random.split(rng, 7)
 
@@ -790,19 +785,45 @@ class GigastepEnv:
             "waypoint_enabled": jnp.float32(0),
             "aux_rewards_factor": jnp.float32(1),
         }
-
-        x = jax.random.uniform(
-            rng[0], shape=(self.n_agents,), minval=0, maxval=self.limits[0]
+        x = self._per_agent_team * jax.random.uniform(
+            rng[0],
+            shape=(self.n_agents,),
+            minval=self._maps["start_pos_team_a"][map_idx][0],
+            maxval=self._maps["start_pos_team_a"][map_idx][2],
+        ) + (1 - self._per_agent_team) * jax.random.uniform(
+            rng[0],
+            shape=(self.n_agents,),
+            minval=self._maps["start_pos_team_b"][map_idx][0],
+            maxval=self._maps["start_pos_team_b"][map_idx][2],
         )
-        y = jax.random.uniform(
-            rng[1], shape=(self.n_agents,), minval=0, maxval=self.limits[1]
+        y = self._per_agent_team * jax.random.uniform(
+            rng[1],
+            shape=(self.n_agents,),
+            minval=self._maps["start_pos_team_a"][map_idx][1],
+            maxval=self._maps["start_pos_team_a"][map_idx][3],
+        ) + (1 - self._per_agent_team) * jax.random.uniform(
+            rng[1],
+            shape=(self.n_agents,),
+            minval=self._maps["start_pos_team_b"][map_idx][1],
+            maxval=self._maps["start_pos_team_b"][map_idx][3],
         )
         z = jax.random.uniform(
-            rng[2], shape=(self.n_agents,), minval=self.z_min, maxval=self.z_max
+            rng[2],
+            shape=(self.n_agents,),
+            minval=self._maps["start_height"][map_idx][0],
+            maxval=self._maps["start_height"][map_idx][1],
         )
-        v = jax.random.uniform(rng[3], shape=(self.n_agents,), minval=1, maxval=2)
-        heading = jax.random.uniform(
-            rng[4], shape=(self.n_agents,), minval=0, maxval=2 * jnp.pi
+        v = jnp.ones(self.n_agents)
+        heading = self._per_agent_team * jax.random.uniform(
+            rng[4],
+            shape=(self.n_agents,),
+            minval=self._maps["start_heading_a"][map_idx][0],
+            maxval=self._maps["start_heading_a"][map_idx][1],
+        ) + (1 - self._per_agent_team) * jax.random.uniform(
+            rng[4],
+            shape=(self.n_agents,),
+            minval=self._maps["start_heading_b"][map_idx][0],
+            maxval=self._maps["start_heading_b"][map_idx][1],
         )
         # To avoid collisions in the reset step, we resample agents that are too close to each other or to boxes
         # up to 3 times
@@ -824,7 +845,7 @@ class GigastepEnv:
             collided = collided - jnp.diag(jnp.diag(collided))
             collided = jnp.sum(collided, axis=1) > 0
 
-            boxes = self._maps[map_state["map_idx"]]
+            boxes = self._maps["boxes"][map_state["map_idx"]]
             hit_box = (
                 (x[:, None] > boxes[None, :, 0] - collision_enlarge)
                 & (x[:, None] < boxes[None, :, 2] + collision_enlarge)
@@ -833,14 +854,33 @@ class GigastepEnv:
             )
             hit_box = jnp.sum(hit_box.astype(jnp.float32), axis=1) > 0
             need_to_resample = collided | hit_box
-            x_new = jax.random.uniform(
-                rng[0], shape=(self.n_agents,), minval=0, maxval=self.limits[0]
+            x_new = self._per_agent_team * jax.random.uniform(
+                rng[0],
+                shape=(self.n_agents,),
+                minval=self._maps["start_pos_team_a"][map_idx][0],
+                maxval=self._maps["start_pos_team_a"][map_idx][2],
+            ) + (1 - self._per_agent_team) * jax.random.uniform(
+                rng[0],
+                shape=(self.n_agents,),
+                minval=self._maps["start_pos_team_b"][map_idx][0],
+                maxval=self._maps["start_pos_team_b"][map_idx][2],
             )
-            y_new = jax.random.uniform(
-                rng[1], shape=(self.n_agents,), minval=0, maxval=self.limits[1]
+            y_new = self._per_agent_team * jax.random.uniform(
+                rng[1],
+                shape=(self.n_agents,),
+                minval=self._maps["start_pos_team_a"][map_idx][1],
+                maxval=self._maps["start_pos_team_a"][map_idx][3],
+            ) + (1 - self._per_agent_team) * jax.random.uniform(
+                rng[1],
+                shape=(self.n_agents,),
+                minval=self._maps["start_pos_team_b"][map_idx][1],
+                maxval=self._maps["start_pos_team_b"][map_idx][3],
             )
             z_new = jax.random.uniform(
-                rng[2], shape=(self.n_agents,), minval=self.z_min, maxval=self.z_max
+                rng[2],
+                shape=(self.n_agents,),
+                minval=self._maps["start_height"][map_idx][0],
+                maxval=self._maps["start_height"][map_idx][1],
             )
             x = jnp.where(need_to_resample, x_new, x)
             y = jnp.where(need_to_resample, y_new, y)

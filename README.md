@@ -1,6 +1,6 @@
 # Gigastep - 1 billion steps per second multi-agent RL
 
-![ci_badge](https://github.com/mlech26l/gigastep/actions/workflows/python-test.yml/badge.svg) 
+![ci_badge](https://github.com/mlech26l/gigastep/actions/workflows/python-app.yml/badge.svg) 
 ![PyPI version](https://img.shields.io/pypi/v/gigastep)
 
 ![Gigastep](misc/scenario.webp)  

@@ -2,7 +2,6 @@ import math
 import sys
 import time
 
-import cv2
 import jax
 import numpy as np
 import jax.numpy as jnp
@@ -29,7 +28,18 @@ class GigastepViewer:
         show_num_agents=1,
     ):
         # only import pygame if the viewer is used
-        self.pygame = importlib.import_module("pygame")
+        try:
+            self.pygame = importlib.import_module("pygame")
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(
+                "Please install pygame (``pip3 install pygame``) to use the viewer"
+            )
+        try:
+            self.cv2 = importlib.import_module("cv2")
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(
+                "Please install cv2 (``pip3 install opencv-python``) to use the viewer"
+            )
         self.pygame.init()
         self.clock = self.pygame.time.Clock()
         self.show_num_agents = show_num_agents
@@ -126,11 +136,11 @@ class GigastepViewer:
         if self.show_global_state:
             global_obs = dyn.get_global_observation(state)
             global_obs = np.array(global_obs, dtype=np.uint8)
-            # obs = cv2.cvtColor(np.array(obs), cv2.COLOR_RGB2BGR)
-            global_obs = cv2.resize(
+            # obs = self.cv2.cvtColor(np.array(obs), self.cv2.COLOR_RGB2BGR)
+            global_obs = self.cv2.resize(
                 global_obs,
                 (self.frame_size, self.frame_size),
-                interpolation=cv2.INTER_NEAREST,
+                interpolation=self.cv2.INTER_NEAREST,
             )
             frame_buffer[
                 0 : self.frame_size,
@@ -140,21 +150,21 @@ class GigastepViewer:
         for i in range(self.show_num_agents):
             obs_1 = obs[i]
             obs_1 = np.array(obs_1, dtype=np.uint8)
-            # obs_1 = cv2.cvtColor(np.array(obs_1), cv2.COLOR_RGB2BGR)
-            obs_1 = cv2.resize(
+            # obs_1 = self.cv2.cvtColor(np.array(obs_1), self.cv2.COLOR_RGB2BGR)
+            obs_1 = self.cv2.resize(
                 obs_1,
                 (self.frame_size, self.frame_size),
-                interpolation=cv2.INTER_NEAREST,
+                interpolation=self.cv2.INTER_NEAREST,
             )
             ## Code to rotate the image to match the heading of the agent upwards
             ## This is confusion to play because outward things move very fast but may be useful later
             # heading = 180 * float(state[0]["heading"][0]) / np.pi + 90
-            # M = cv2.getRotationMatrix2D(
+            # M = self.cv2.getRotationMatrix2D(
             #     (obs_1.shape[0] // 2, obs_1.shape[1] // 2),
             #     -heading,
             #     1.0,
             # )
-            # obs_1 = cv2.warpAffine(obs_1, M, (obs_1.shape[0], obs_1.shape[1]))
+            # obs_1 = self.cv2.warpAffine(obs_1, M, (obs_1.shape[0], obs_1.shape[1]))
 
             idx = i + int(self.show_global_state)
             row = idx // self._num_cols
@@ -166,7 +176,7 @@ class GigastepViewer:
         self._show_image(frame_buffer)
         self.poll()
         self.clock.tick(60)
-        frame_buffer = cv2.cvtColor(frame_buffer, cv2.COLOR_RGB2BGR)
+        frame_buffer = self.cv2.cvtColor(frame_buffer, self.cv2.COLOR_RGB2BGR)
         return np.transpose(frame_buffer, [1, 0, 2])
 
     def _show_image(self, image):

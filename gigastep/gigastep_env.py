@@ -79,6 +79,7 @@ class GigastepEnv:
         very_close_cone_depth=1.0,
         cone_depth=3.5,
         cone_angle=jnp.pi / 2,
+        damage_cone_angle=jnp.pi / 4,
         damage_per_second=3,
         healing_per_second=0.3,
         use_stochastic_obs=True,
@@ -109,6 +110,7 @@ class GigastepEnv:
         self.very_close_cone_depth = jnp.square(very_close_cone_depth)
         self.cone_depth = jnp.square(cone_depth)
         self.cone_angle = cone_angle
+        self.damage_cone_angle = damage_cone_angle
         self.damage_per_second = damage_per_second
         self.healing_per_second = healing_per_second
         self.collision_range = jnp.square(collision_range)
@@ -401,6 +403,7 @@ class GigastepEnv:
             - jnp.pi
         )
         in_cone = jnp.abs(angles) < self.cone_angle
+        in_damage_cone = jnp.abs(angles) < self.damage_cone_angle
         if self.use_stochastic_obs:
             # if not in cone, set closness_score to 1.1 so that it is always greater than rand
             in_cone_score = jnp.clip(closness_score, 0, 1) + (1 - in_cone) * 1.1
@@ -421,11 +424,13 @@ class GigastepEnv:
 
         # Check if agents are in the cone of vision of another agent
         has_detected = has_detected.astype(jnp.float32)
+        deal_damage = has_detected * in_damage_cone
 
         seen = jnp.sum(has_detected, axis=1)  # can be greater than 1
+        takes_damage = jnp.sum(deal_damage, axis=1)  # can be greater than 1
         health = (
             agent_states["health"]
-            - seen * self.damage_per_second * self.time_delta
+            - takes_damage * self.damage_per_second * self.time_delta
             + self.healing_per_second * self.time_delta  # automatic healing over time
             + agent_states["max_health"] * hit_waypoint  # waypoint recharges health
         ) * alive
@@ -434,6 +439,7 @@ class GigastepEnv:
         )  # max health is agent dependent
 
         detected_other_agent = jnp.sum(has_detected, axis=0)
+        damages_other_agent = jnp.sum(deal_damage, axis=0)
 
         # Check if agents are dead
         alive = alive * (health > 0)
@@ -453,10 +459,12 @@ class GigastepEnv:
         ### REWARDS ###
         reward = hit_waypoint
         # Positive reward for detecting other agents
-        reward = reward + detected_other_agent * self.time_delta * alive
+        reward = reward + 0.5 * detected_other_agent * self.time_delta * alive
+        reward = reward + damages_other_agent * self.time_delta * alive
 
         # Negative reward for being detected (weighted less than detecting to encourage exploration)
-        reward = reward - 0.5 * seen * self.time_delta * alive
+        reward = reward - 0.2 * seen * self.time_delta * alive
+        reward = reward - 0.5 * takes_damage * self.time_delta * alive
         # Negative reward for being idle
         reward = reward - 0.01 * self.time_delta * alive
 
@@ -692,24 +700,24 @@ class GigastepEnv:
                     (seen * agent_states["health"])[sorted_indices][
                         : self.max_agent_in_vec_obs
                     ],
+                    (seen * agent_states["sprite"])[sorted_indices][
+                        : self.max_agent_in_vec_obs
+                    ],  # type of agent
                 ],
                 axis=1,  # stack along the second dimension
             )
             vector_obs = vector_obs.flatten()
 
-            boxes = self._maps["boxes"][map_state["map_idx"]]
             # normalize
             box_normalizer = jnp.array(
                 [[self.limits[0], self.limits[1], self.limits[0], self.limits[1]]]
             )
-            boxes = boxes / box_normalizer
 
             waypoint_loc = map_state["waypoint_location"] / box_normalizer
             # append obstacles and waypoints to the end of the vector
             vector_obs = jnp.concatenate(
                 [
                     vector_obs,
-                    boxes.flatten(),
                     waypoint_loc.flatten(),
                     jnp.array([map_state["waypoint_enabled"]]),
                 ]

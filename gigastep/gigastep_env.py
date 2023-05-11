@@ -84,6 +84,7 @@ class GigastepEnv:
         healing_per_second=0.3,
         use_stochastic_obs=True,
         use_stochastic_comm=True,
+        enable_waypoints=True,
         collision_range=0.4,
         collision_altitude=0.5,
         collision_penalty=10,
@@ -122,6 +123,7 @@ class GigastepEnv:
         self.max_communication_range = 10
         self.waypoint_size = waypoint_size
         self.team_reward = team_reward
+        self.enable_waypoints = enable_waypoints
         self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
 
         if per_agent_sprites is None:
@@ -162,54 +164,31 @@ class GigastepEnv:
         )
 
         # How many variables we need to represent the map
-        map_obs_len = 4 * self._maps["boxes"].shape[1]
+        rgb_obs_spec = Box(
+            low=jnp.zeros([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8),
+            high=255
+            * jnp.ones([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8),
+        )
+        # 9 variables per agents, 5 for the waypoint
+        obs_vars_for_waypoint = 5 if self.enable_waypoints else 0
+        vector_obs_spec = Box(
+            low=jnp.NINF
+            * jnp.ones(
+                [obs_vars_for_waypoint + 9 * self.max_agent_in_vec_obs],
+                dtype=jnp.float32,
+            ),
+            high=jnp.inf
+            * jnp.ones(
+                [obs_vars_for_waypoint + 9 * self.max_agent_in_vec_obs],
+                dtype=jnp.float32,
+            ),
+        )
         if obs_type == "rgb":
-            self.observation_space = Box(
-                low=jnp.zeros(
-                    [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
-                ),
-                high=255
-                * jnp.ones(
-                    [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
-                ),
-            )
+            self.observation_space = rgb_obs_spec
         elif obs_type == "vector":
-            self.observation_space = Box(
-                low=jnp.NINF
-                * jnp.ones(
-                    [map_obs_len + 8 * self.max_agent_in_vec_obs],
-                    dtype=jnp.float32,
-                ),
-                high=jnp.inf
-                * jnp.ones(
-                    [map_obs_len + 8 * self.max_agent_in_vec_obs],
-                    dtype=jnp.float32,
-                ),
-            )
+            self.observation_space = vector_obs_spec
         elif obs_type == "rgb_vector":
-            self.observation_space = (
-                Box(
-                    low=jnp.zeros(
-                        [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
-                    ),
-                    high=255
-                    * jnp.ones(
-                        [self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8
-                    ),
-                ),
-                Box(
-                    low=jnp.NINF
-                    * jnp.ones(
-                        [map_obs_len + 8 * self.max_agent_in_vec_obs],
-                        dtype=jnp.float32,
-                    ),
-                    high=jnp.inf
-                    * jnp.ones(
-                        [map_obs_len + 8 * self.max_agent_in_vec_obs],
-                        dtype=jnp.float32,
-                    ),
-                ),
-            )
+            self.observation_space = (rgb_obs_spec, vector_obs_spec)
 
         self.discrete_actions = discrete_actions
         if self.discrete_actions:
@@ -312,44 +291,48 @@ class GigastepEnv:
         teams = agent_states["team"]
 
         ### Waypoints
+        hit_waypoint = 0
         waypoint_location = map_state["waypoint_location"]
         waypoint_enabled = map_state["waypoint_enabled"]
-        hit_waypoint = (map_state["waypoint_enabled"] > 0) * (
-            (x >= waypoint_location[0])
-            & (x <= waypoint_location[2])
-            & (y >= waypoint_location[1])
-            & (y <= waypoint_location[3])
-        )
-        rng, key1, key2, key3 = jax.random.split(rng, 4)
-        waypoint_enabled = waypoint_enabled - self.time_delta
-        # Waypoint disappears when the time runs up or if it is collected
-        waypoint_enabled = (jnp.sum(hit_waypoint) == 0).astype(
-            jnp.float32
-        ) * waypoint_enabled
+        if self.enable_waypoints:
+            hit_waypoint = (map_state["waypoint_enabled"] > 0) * (
+                (x >= waypoint_location[0])
+                & (x <= waypoint_location[2])
+                & (y >= waypoint_location[1])
+                & (y <= waypoint_location[3])
+            )
+            rng, key1, key2, key3 = jax.random.split(rng, 4)
+            waypoint_enabled = waypoint_enabled - self.time_delta
+            # Waypoint disappears when the time runs up or if it is collected
+            waypoint_enabled = (jnp.sum(hit_waypoint) == 0).astype(
+                jnp.float32
+            ) * waypoint_enabled
 
-        # There is a 5% chance a new waypoint appears
-        waypoint_appear = (waypoint_enabled <= 0) & (jax.random.uniform(key3) < 0.05)
-        new_waypoint_location = jax.random.uniform(
-            key2,
-            shape=(2,),
-            minval=jnp.zeros(2),
-            maxval=jnp.array(self.limits) - self.waypoint_size,
-        )
-        new_waypoint_location = jnp.array(
-            [
-                new_waypoint_location[0],
-                new_waypoint_location[1],
-                new_waypoint_location[0] + self.waypoint_size,
-                new_waypoint_location[1] + self.waypoint_size,
-            ]
-        )
-        new_waypoint_time = jax.random.uniform(key1, minval=1, maxval=3)
-        waypoint_location = (
-            waypoint_appear * new_waypoint_location
-            + (1 - waypoint_appear) * waypoint_location
-        )
-        waypoint_enabled = jnp.maximum(waypoint_enabled, 0)
-        waypoint_enabled = waypoint_enabled + waypoint_appear * new_waypoint_time
+            # There is a 5% chance a new waypoint appears
+            waypoint_appear = (waypoint_enabled <= 0) & (
+                jax.random.uniform(key3) < 0.05
+            )
+            new_waypoint_location = jax.random.uniform(
+                key2,
+                shape=(2,),
+                minval=jnp.zeros(2),
+                maxval=jnp.array(self.limits) - self.waypoint_size,
+            )
+            new_waypoint_location = jnp.array(
+                [
+                    new_waypoint_location[0],
+                    new_waypoint_location[1],
+                    new_waypoint_location[0] + self.waypoint_size,
+                    new_waypoint_location[1] + self.waypoint_size,
+                ]
+            )
+            new_waypoint_time = jax.random.uniform(key1, minval=1, maxval=3)
+            waypoint_location = (
+                waypoint_appear * new_waypoint_location
+                + (1 - waypoint_appear) * waypoint_location
+            )
+            waypoint_enabled = jnp.maximum(waypoint_enabled, 0)
+            waypoint_enabled = waypoint_enabled + waypoint_appear * new_waypoint_time
 
         ### Out of bounds check
         out_of_bounds = (x < 0) | (x > self.limits[0]) | (y < 0) | (y > self.limits[1])
@@ -569,42 +552,44 @@ class GigastepEnv:
             rgb_obs = rgb_obs.at[self.resolution[0] - 1, :, :].max(
                 255 * not_taken_damage
             )
-            waypoint_x = jnp.round(
-                (
+
+            if self.enable_waypoints:
+                waypoint_x = jnp.round(
                     (
-                        map_state["waypoint_location"][0]
-                        + map_state["waypoint_location"][2]
+                        (
+                            map_state["waypoint_location"][0]
+                            + map_state["waypoint_location"][2]
+                        )
+                        / 2
                     )
-                    / 2
-                )
-                * self.resolution[0]
-                / self.limits[0]
-            ).astype(jnp.int32)
-            waypoint_y = jnp.round(
-                (
+                    * self.resolution[0]
+                    / self.limits[0]
+                ).astype(jnp.int32)
+                waypoint_y = jnp.round(
                     (
-                        map_state["waypoint_location"][0]
-                        + map_state["waypoint_location"][2]
+                        (
+                            map_state["waypoint_location"][0]
+                            + map_state["waypoint_location"][2]
+                        )
+                        / 2
                     )
-                    / 2
-                )
-                * self.resolution[0]
-                / self.limits[0]
-            ).astype(jnp.int32)
-            # Magenta
-            waypoint_color = (
-                (map_state["waypoint_enabled"] > 0) * jnp.array([127, 0, 127])
-            ).astype(jnp.uint8)
-            rgb_obs = rgb_obs.at[waypoint_x, waypoint_y].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x, waypoint_y].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x, waypoint_y + 1].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x, waypoint_y - 1].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y + 1].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y - 1].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y + 1].set(waypoint_color)
-            rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y - 1].set(waypoint_color)
+                    * self.resolution[0]
+                    / self.limits[0]
+                ).astype(jnp.int32)
+                # Magenta
+                waypoint_color = (
+                    (map_state["waypoint_enabled"] > 0) * jnp.array([127, 0, 127])
+                ).astype(jnp.uint8)
+                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y + 1].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y - 1].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y + 1].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y - 1].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y + 1].set(waypoint_color)
+                rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y - 1].set(waypoint_color)
 
             # Health bar is green
             rgb_obs = rgb_obs.at[:, self.resolution[1] - 1, 1].max(255)
@@ -708,20 +693,36 @@ class GigastepEnv:
             )
             vector_obs = vector_obs.flatten()
 
-            # normalize
-            box_normalizer = jnp.array(
-                [[self.limits[0], self.limits[1], self.limits[0], self.limits[1]]]
-            )
+            if self.enable_waypoints:
+                # normalize
+                box_normalizer_sub = jnp.array(
+                    [
+                        agent_states["x"][agent_id],
+                        agent_states["y"][agent_id],
+                        agent_states["x"][agent_id],
+                        agent_states["y"][agent_id],
+                    ]
+                )
+                box_normalizer_div = jnp.array(
+                    [
+                        self.limits[0],
+                        self.limits[1],
+                        self.limits[0],
+                        self.limits[1],
+                    ]
+                )
 
-            waypoint_loc = map_state["waypoint_location"] / box_normalizer
-            # append obstacles and waypoints to the end of the vector
-            vector_obs = jnp.concatenate(
-                [
-                    vector_obs,
-                    waypoint_loc.flatten(),
-                    jnp.array([map_state["waypoint_enabled"]]),
-                ]
-            )
+                relative_waypoint_loc = (
+                    map_state["waypoint_location"] - box_normalizer_sub
+                ) / box_normalizer_div
+                # append obstacles and waypoints to the end of the vector
+                vector_obs = jnp.concatenate(
+                    [
+                        vector_obs,
+                        relative_waypoint_loc.flatten(),
+                        jnp.array([map_state["waypoint_enabled"]]),
+                    ]
+                )
             # now obs of ego is at the beginning of the vector
             # obs other agents are consecutive and sorted by distance from ego
 

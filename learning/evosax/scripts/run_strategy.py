@@ -1,7 +1,7 @@
 import os
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import jax
 import jax.numpy as jnp
@@ -14,6 +14,9 @@ import tqdm
 import time
 from datetime import datetime
 import numpy as np
+
+from collections import deque
+import random
 
 
 def network_setup(train_evaluator, test_evaluator, rng, net_type="CNN"):
@@ -91,7 +94,11 @@ def run_gigastep_fitness(
     for s_name in strategy_name:
         num_generations = 100
         evaluate_every_gen = 10
+
         update_ado_freq = 10
+        extend_ado_freq = 10
+        max_ado_params = 10
+        params_ado_buffer = deque(maxlen=max_ado_params)
 
         log_tensorboard = True
 
@@ -115,8 +122,9 @@ def run_gigastep_fitness(
         strategy_params = {}
         strategy_params["centered_rank"] = True
         strategy_params["popsize"] = 32
+        # strategy_params["mean_decay"] = 1.e-2
         if s_name=="DES":
-            strategy_params["sigma_init"] = 5.0
+            strategy_params["sigma_init"] = 0.1  # 5.0
         if s_name=="PGPE":
             strategy_params["elite_ratio"] = 1.0
         else:
@@ -137,6 +145,11 @@ def run_gigastep_fitness(
         )
         es_log = es_logging.initialize()
 
+        # # Initialize opponent buffer
+        # x_mean = jnp.repeat(es_state_mean[None], x.shape[0], 0)
+        # x_mean_re = train_param_reshaper.reshape(x_mean)
+        # params_ado_buffer.append(x_mean_re)
+
         # Run the ask-eval-tell loop
         log_steps, log_return = [], []
         t = tqdm.tqdm(range(1, num_generations + 1), desc=s_name, leave=True)
@@ -148,10 +161,13 @@ def run_gigastep_fitness(
             x_re = train_param_reshaper.reshape(x)
 
             # Get mean parameters for the ado team
-            if gen % update_ado_freq == 0:
+            if (gen-1) % extend_ado_freq == 0:
                 es_state_mean = es_state.mean.copy()
-            x_mean = jnp.repeat(es_state_mean[None], x.shape[0], 0)  # TODO: check if repeat can be removed
-            x_mean_re = train_param_reshaper.reshape(x_mean)
+                x_mean = jnp.repeat(es_state_mean[None], x.shape[0], 0)  # TODO: check if repeat can be removed
+                params_ado = train_param_reshaper.reshape(x_mean)
+                params_ado_buffer.append(params_ado)
+            if (gen-1) % update_ado_freq == 0:
+                x_mean_re = random.sample(list(params_ado_buffer), 1)[0]
 
             # Rollout fitness and update parameter distribution
             scores = train_evaluator.rollout(rng_eval, x_re, x_mean_re)
@@ -210,7 +226,7 @@ if __name__ == "__main__":
     t_start = time.time()
     run_gigastep_fitness(
         scenario_name="identical_10_vs_10", 
-        strategy_name=["OpenES"],  # ["OpenES", "DES", "CR_FM_NES"],
+        strategy_name=["DES"],  # ["OpenES", "DES", "CR_FM_NES"],
         network_type="LSTM_CNN")
     t_end = time.time()
     print("Runtime = " + str(round(t_end-t_start, 3)))

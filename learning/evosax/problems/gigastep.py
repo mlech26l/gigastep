@@ -62,16 +62,25 @@ class GigastepFitness(object):
             self.rollout_map = self.rollout_pop
 
     def rollout_pmap(
-        self, rng_input: chex.PRNGKey, policy_params: chex.ArrayTree
+        self, rng_input: chex.PRNGKey, ego_policy_params: chex.ArrayTree, ado_policy_params: chex.ArrayTree
     ):
         """Parallelize rollout across devices. Split keys/reshape correctly."""
         keys_pmap = jnp.tile(rng_input, (self.n_devices, 1, 1))
-        rew_dev, steps_dev = jax.pmap(self.rollout_pop)(
-            keys_pmap, policy_params
+        out_rollout_map = jax.pmap(self.rollout_pop)(
+            keys_pmap, ego_policy_params, ado_policy_params
         )
-        rew_re = rew_dev.reshape(-1, self.num_rollouts)
-        steps_re = steps_dev.reshape(-1, self.num_rollouts)
-        return rew_re, steps_re
+        rew_re = out_rollout_map[0].reshape(-1, self.num_rollouts)
+        steps_re = out_rollout_map[1].reshape(-1, self.num_rollouts)  # NOTE: weird shape, but will only be summed
+        if self.test:
+            images_global_re = out_rollout_map[2][0]  # NOTE: 1st device
+            images_ego_re = out_rollout_map[3][0]  # NOTE: 1st device
+            out_rollout = rew_re, steps_re, images_global_re, images_ego_re
+        else:
+            out_rollout = rew_re, steps_re
+            
+        # rew_re = rew_dev.reshape(-1, self.num_rollouts)
+        # steps_re = steps_dev.reshape(-1, self.num_rollouts)
+        return out_rollout
 
     def rollout(self, rng_input: chex.PRNGKey, ego_policy_params: chex.ArrayTree, ado_policy_params: chex.ArrayTree):
         """Placeholder fn call for rolling out a population for multi-evals."""
@@ -157,7 +166,7 @@ class GigastepFitness(object):
             out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv_global), jnp.array(ep_obsv_ego))
         else:
             ep_mask = scan_out[0]
-            out_scan = (jnp.array(ep_mask))
+            out_scan = (jnp.array(ep_mask),)
         cum_return = carry_out[-2].squeeze()
         return cum_return, *out_scan
 
@@ -244,6 +253,6 @@ class GigastepFitness(object):
             out_scan = (jnp.array(ep_mask), jnp.array(ep_obsv_global), jnp.array(ep_obsv_ego))
         else:
             ep_mask = scan_out[0]
-            out_scan = (jnp.array(ep_mask))
+            out_scan = (jnp.array(ep_mask),)
         cum_return = carry_out[-2].squeeze()
         return cum_return, *out_scan

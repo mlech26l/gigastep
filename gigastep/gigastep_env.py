@@ -105,6 +105,7 @@ class GigastepEnv:
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
+        max_episode_length=1000,
         jit=True,
     ):
         self.n_agents = n_agents
@@ -125,6 +126,7 @@ class GigastepEnv:
         self.team_reward = team_reward
         self.enable_waypoints = enable_waypoints
         self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
+        self.max_episode_length = max_episode_length
 
         if per_agent_sprites is None:
             per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)
@@ -430,14 +432,20 @@ class GigastepEnv:
         # Check if episode is done (all agents of one team dead)
         alive_team1 = jnp.sum(alive * (teams == 0))
         alive_team2 = jnp.sum(alive * (teams == 1))
-        episode_done = (alive_team1 == 0) | (alive_team2 == 0)
 
         map_state = {
             "map_idx": map_state["map_idx"],
             "waypoint_location": waypoint_location,
             "waypoint_enabled": waypoint_enabled,
             "aux_rewards_factor": map_state["aux_rewards_factor"],
+            "episode_length": map_state["episode_length"] + 1,
         }
+        episode_done = (alive_team1 == 0) | (alive_team2 == 0)
+        if self.max_episode_length is not None:
+            # if max_episode_length is not set then episode continues until all agents of one team are dead
+            episode_done = episode_done | (
+                map_state["episode_length"] >= self.max_episode_length
+            )
 
         ### REWARDS ###
         reward = hit_waypoint
@@ -793,6 +801,7 @@ class GigastepEnv:
             "waypoint_location": jnp.zeros(4),
             "waypoint_enabled": jnp.float32(0),
             "aux_rewards_factor": jnp.float32(1),
+            "episode_length": jnp.int32(0),
         }
         x = self._per_agent_team * jax.random.uniform(
             rng[0],

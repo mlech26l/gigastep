@@ -1,3 +1,8 @@
+"""
+Call with the following command
+XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 python examples/train_gigastep.py
+# Example usage: CUDA_VISIBLE_DEVICES=0  XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 python examples/train_gigastep.py
+"""
 import numpy as np
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 from gym.spaces import Dict as GymDict, Box
@@ -7,6 +12,11 @@ from marllib.envs.base_env import ENV_REGISTRY
 import time
 import jax
 from gigastep import ScenarioBuilder
+
+import os
+# os.environ["JAX_PLATFORM_NAME"] = "cpu" 
+# os.environ["export XLA_PYTHON_CLIENT_PREALLOCATE"]= "false"
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 
 # provide detailed information of each scenario
@@ -30,6 +40,7 @@ policy_mapping_dict = {
 class RLlibMAGym(MultiAgentEnv):
 
     def __init__(self, env_config):
+        print("================================instantiate================================")
         map = env_config.pop("map_name", None)
 
         if "custom" in map:
@@ -62,7 +73,11 @@ class RLlibMAGym(MultiAgentEnv):
         env_config["map_name"] = map
         self.env_config = env_config
 
+        self.max_steps = 500
+
     def reset(self):
+        self.steps = 0
+
         self.rng, key_reset = jax.random.split(self.rng, 2)
         self.state, original_obs = self.env.reset(key_reset)
 
@@ -88,8 +103,10 @@ class RLlibMAGym(MultiAgentEnv):
             }
 
         # assert ep_done.item() == (sum(d).item() == self.num_agents)
-        dones = {"__all__": ep_done.item()}
+        dones = {"__all__": ep_done.item()} # and (self.steps < self.max_steps)}
 
+        self.steps += 1
+        
         return obs, rewards, dones, {}
 
     def close(self):
@@ -112,6 +129,11 @@ class RLlibMAGym(MultiAgentEnv):
 
 
 if __name__ == '__main__':
+    n_workers = 1
+    local_mode = False # False
+    # if not local_mode:
+        # jax.distributed.initialize(num_processes=n_workers)
+        # jax.distributed.initialize()
     # register new env
     ENV_REGISTRY["gigastep"] = RLlibMAGym
     # initialize env
@@ -119,7 +141,7 @@ if __name__ == '__main__':
     # pick mappo algorithms
     mappo = marl.algos.mappo(hyperparam_source="test")
     # customize model
-    model = marl.build_model(env, mappo, {"core_arch": "mlp", "encode_layer": "128-128"})
+    model = marl.build_model(env, mappo, {"core_arch": "gru", "hidden_state_size": 128})
     # start learning
-    mappo.fit(env, model, stop={'episode_reward_mean': 2000, 'timesteps_total': 10000000}, local_mode=True, num_gpus=1,
-              num_workers=0, share_policy='all', checkpoint_freq=50)
+    mappo.fit(env, model, stop={'episode_reward_mean': 2000, 'timesteps_total': 10000000}, local_mode=local_mode, num_gpus=1,
+              num_workers=n_workers, num_envs_per_worker=5, share_policy='all', checkpoint_freq=50)

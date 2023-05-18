@@ -120,6 +120,8 @@ def run_cc(exp_info, env, model, stop=None):
         "num_gpus_per_worker": exp_info["num_gpus_per_worker"],
         "num_gpus": exp_info["num_gpus"],
         "num_workers": exp_info["num_workers"],
+        "num_envs_per_worker": exp_info["num_envs_per_worker"],
+        # "num_rollout_workers": exp_info["num_rollout_workers"],
         "multiagent": {
             "policies": policies,
             "policy_mapping_fn": policy_mapping_fn

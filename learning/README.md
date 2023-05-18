@@ -8,6 +8,10 @@ $ cd MARLlib
 $ pip install -e .
 $ pip install ma_gym
 ```
+```
+$ cd ray
+$ python python/ray/setup-dev.py -y
+```
 
 ### Run
 ```

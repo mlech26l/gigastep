@@ -26,6 +26,7 @@ class GigastepViewer:
         frame_size,
         show_global_state=True,
         show_num_agents=1,
+        headless = False
     ):
         # only import pygame if the viewer is used
         try:
@@ -49,6 +50,7 @@ class GigastepViewer:
         self.should_quit = False
         self.should_reset = False
         self._should_pause = False
+        self.headless = headless
         if show_num_agents <= 6:
             self._num_cols = show_num_agents + int(show_global_state)
             self._num_rows = 1
@@ -173,7 +175,8 @@ class GigastepViewer:
                 col * self.frame_size : (col + 1) * self.frame_size,
                 row * self.frame_size : (row + 1) * self.frame_size,
             ] = obs_1
-        self._show_image(frame_buffer)
+        if not self.headless:
+            self._show_image(frame_buffer)
         self.poll()
         self.clock.tick(60)
         frame_buffer = self.cv2.cvtColor(frame_buffer, self.cv2.COLOR_RGB2BGR)

@@ -61,7 +61,7 @@ class GigastepViewer:
             )
         frame = (frame_size * self._num_cols, frame_size * self._num_rows)
 
-        if GigastepViewer.display is None:
+        if GigastepViewer.display is None and self.headless is False:
             GigastepViewer.display = self.pygame.display.set_mode(frame)
 
         self.discrete_action = 0

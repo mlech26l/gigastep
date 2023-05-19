@@ -151,6 +151,38 @@ _builtin_scenarios = {
         "team_1": {"boss": 5},
         "map": "empty",
     },
+    "identical_20_vs_20_center_block": {
+        "team_0": {"default": 20},
+        "team_1": {"default": 20},
+        "map": "center_block",
+        "map_size": (20, 20),
+    },
+    "identical_20_vs_20_two_rooms1": {
+        "team_0": {"default": 20},
+        "team_1": {"default": 20},
+        "map": "two_rooms1",
+        "map_size": (20, 20),
+    },
+    "identical_10_vs_10_center_block": {
+        "team_0": {"default": 10},
+        "team_1": {"default": 10},
+        "map": "center_block",
+    },
+    "identical_10_vs_10_two_rooms1": {
+        "team_0": {"default": 10},
+        "team_1": {"default": 10},
+        "map": "two_rooms1",
+    },
+    "identical_5_vs_5_center_block": {
+        "team_0": {"default": 5},
+        "team_1": {"default": 5},
+        "map": "center_block",
+    },
+    "identical_5_vs_5_two_rooms1": {
+        "team_0": {"default": 5},
+        "team_1": {"default": 5},
+        "map": "two_rooms1",
+    },
 }
 
 

@@ -102,6 +102,11 @@ class GigastepEnv:
         per_agent_team=None,
         tagged_penalty=5,
         team_reward=0,
+        reward_game_won = 1,
+        reward_defeat_one_opponent = 1,
+        reward_detection = 1,
+        reward_idle = 1,
+        reward_collision = 1,
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
@@ -127,6 +132,12 @@ class GigastepEnv:
         self.enable_waypoints = enable_waypoints
         self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
         self.max_episode_length = max_episode_length
+        self.reward_game_won = reward_game_won
+        self.reward_defeat_one_opponent = reward_defeat_one_opponent
+        self.reward_detection = reward_detection
+        self.reward_idle = reward_idle
+        self.reward_collision = reward_collision
+
 
         if per_agent_sprites is None:
             per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)
@@ -153,6 +164,14 @@ class GigastepEnv:
                 [jnp.ones((team_blue,)), jnp.zeros((team_red,))], axis=0
             )
         self._per_agent_team = per_agent_team
+        n_ego_agents = 0 
+        n_opponents = 0
+        for i in self._per_agent_team:
+            if i==0:
+                n_ego_agents += 1 
+            else:
+                n_opponents += 1
+        self.n_teams = [n_ego_agents, n_opponents]
 
         self.limits = (limit_x, limit_y)
         self.z_max = 10
@@ -293,6 +312,10 @@ class GigastepEnv:
         z = agent_states["z"]
         alive = agent_states["alive"]
         teams = agent_states["team"]
+        
+        # Previous alive agents
+        alive_team1_pre = jnp.sum(alive * (teams == 0))
+        alive_team2_pre = jnp.sum(alive * (teams == 1))
 
         ### Waypoints
         hit_waypoint = 0
@@ -449,37 +472,49 @@ class GigastepEnv:
                 map_state["episode_length"] >= self.max_episode_length
             )
 
+        reward = jnp.zeros_like(hit_waypoint)
         ### REWARDS ###
-        reward = hit_waypoint
-        # Positive reward for detecting other agents
-        reward = reward + 0.5 * detected_other_agent * self.time_delta * alive
-        reward = reward + damages_other_agent * self.time_delta * alive
+        if self.reward_defeat_one_opponent>0:
+            reward = reward +  (alive_team1 - alive_team1_pre) * (teams == 0) * alive \
+                     - (alive_team2 - alive_team2_pre) * (teams == 0) * alive + \
+                    -(alive_team1 - alive_team1_pre) * (teams == 1) * alive \
+                    + (alive_team2 - alive_team2_pre) * (teams == 1) * alive
 
-        # Negative reward for being detected (weighted less than detecting to encourage exploration)
-        reward = reward - 0.2 * seen * self.time_delta * alive
-        reward = reward - 0.5 * takes_damage * self.time_delta * alive
+        # Positive reward for detecting other agents
+
+        if self.reward_detection>0:
+            reward = hit_waypoint
+            reward = reward + 0.5 * detected_other_agent * self.time_delta * alive
+            reward = reward + damages_other_agent * self.time_delta * alive
+
+            # Negative reward for being detected (weighted less than detecting to encourage exploration)
+            reward = reward - 0.2 * seen * self.time_delta * alive
+            reward = reward - 0.5 * takes_damage * self.time_delta * alive
+
+
         # Negative reward for being idle
-        reward = reward - 0.01 * self.time_delta * alive
+        if self.reward_idle>0:
+            reward = reward - 0.01 * self.time_delta * alive
 
         # Negative reward for collisions, going out of bounds and hitting boxes
         # Negative reward for dying (health drops to 0)
-        reward = (
+        if self.reward_collision>0:
+            reward = (
             reward
-            - (collided + out_of_bounds + hit_box + (health <= 0).astype(jnp.float32))
-            * self.collision_penalty
-            * alive
-        )
+                - (collided + out_of_bounds + hit_box + (health <= 0).astype(jnp.float32))
+                * self.collision_penalty
+                * alive
+            )
         # TODO: add reward other rewards here for disabling other agents and exploration here
-
 
         # Positive reward for winning the game (weighted by number of agents)
         game_won_reward = (
-            self.n_agents * (alive_team2 == 0) * (teams == 0) * alive
-            + self.n_agents * (alive_team1 == 0) * (teams == 1) * alive
+             (alive_team2 == 0) * (teams == 0) * alive
+            +   (alive_team1 == 0) * (teams == 1) * alive
         )
         # Enable curriculum learning by scaling the auxiliary reward
         # if aux factor is set to zero only the end of the winning of the game will give a reward
-        reward = map_state["aux_rewards_factor"] * reward + game_won_reward
+        reward = map_state["aux_rewards_factor"] * reward + self.reward_game_won * game_won_reward
 
         agent_states = {
             "x": x,

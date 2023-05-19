@@ -45,6 +45,20 @@ _builtin_maps = {
         "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
         "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
     },
+    "center_block": {
+        "boxes": jnp.array(
+            [
+                [3.8, 3.8, 6.2, 6.2],
+            ],
+            dtype=jnp.float32,
+        ),
+        "start_pos_team_a": jnp.array([0, 0, 10, 3], dtype=jnp.float32),
+        "start_pos_team_b": jnp.array([0, 7, 10, 10], dtype=jnp.float32),
+        "start_height": jnp.array([0, 0], dtype=jnp.float32),
+        "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
+        "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
+    },
+    
     # TODO: Upgrade the code below to also store the starting positions of the agents.
     "two_rooms2": jnp.array(
         [

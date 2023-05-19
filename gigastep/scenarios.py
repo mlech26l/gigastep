@@ -117,32 +117,39 @@ _builtin_scenarios = {
         "map": "empty",
     },
     "special_5_vs_5": {
-        "team_0": {"tank": 1, "sniper": 1, "scout": 1, "default": 2},
-        "team_1": {"tank": 1, "sniper": 1, "scout": 1, "default": 2},
+        "team_0": {"tank": 1, "sniper": 1, "scout": 1, "boss": 1, "default": 1},
+        "team_1": {"tank": 1, "sniper": 1, "scout": 1, "boss": 1, "default": 1},
+        "map": "empty",
     },
     "identical_5_vs_1": {
         "team_0": {"default": 5},
         "team_1": {"boss": 1},
+        "map": "empty",
     },
     "special_5_vs_1": {
         "team_0": {"tank": 1, "sniper": 1, "scout": 1, "default": 2},
         "team_1": {"boss": 1},
+        "map": "empty",
     },
     "identical_10_vs_3": {
         "team_0": {"default": 10},
         "team_1": {"boss": 3},
+        "map": "empty",
     },
     "special_10_vs_3": {
         "team_0": {"tank": 3, "sniper": 3, "scout": 3, "default": 1},
         "team_1": {"boss": 3},
+        "map": "empty",
     },
     "identical_20_vs_5": {
         "team_0": {"default": 20},
         "team_1": {"boss": 5},
+        "map": "empty",
     },
     "special_20_vs_5": {
         "team_0": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
         "team_1": {"boss": 5},
+        "map": "empty",
     },
 }
 

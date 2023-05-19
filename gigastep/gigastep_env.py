@@ -197,7 +197,9 @@ class GigastepEnv:
             # 3x3x3 = 27 actions {+1, 0, -1}^3
             self.action_space = Discrete(3**3)
             self.action_lut = jnp.array(
-                jnp.meshgrid([-1, 0, 1], [-1, 0, 1], [-1, 0, 1])
+                jnp.meshgrid(jnp.array([-1., 0., 1.]),
+                             jnp.array([-1., 0., 1.]),
+                             jnp.array([-1., 0., 1.]))
             ).T.reshape(-1, 3)
         else:
             self.action_space = Box(low=-jnp.ones(3), high=jnp.ones(3))
@@ -227,7 +229,7 @@ class GigastepEnv:
         v_resistance = 0.4
 
         if self.discrete_actions:
-            action = self.action_lut[action]
+            action = self.action_lut[action].reshape(3).astype(jnp.float32)
 
         action = jnp.clip(action, -1, 1)
         u_heading, u_dive, u_throttle = action
@@ -468,6 +470,7 @@ class GigastepEnv:
             * alive
         )
         # TODO: add reward other rewards here for disabling other agents and exploration here
+
 
         # Positive reward for winning the game (weighted by number of agents)
         game_won_reward = (

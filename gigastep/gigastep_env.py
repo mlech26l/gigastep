@@ -77,8 +77,9 @@ class GigastepEnv:
     def __init__(
         self,
         very_close_cone_depth=1.0,
-        cone_depth=3.5,
-        cone_angle=jnp.pi / 2,
+        cone_depth=6.0,
+        cone_angle=jnp.pi * 0.8,
+        damage_cone_depth=3.0,
         damage_cone_angle=jnp.pi / 4,
         damage_per_second=3,
         healing_per_second=0.3,
@@ -110,13 +111,14 @@ class GigastepEnv:
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
-        max_episode_length=1000,
+        max_episode_length=500,
         jit=True,
     ):
         self.n_agents = n_agents
         self.very_close_cone_depth = jnp.square(very_close_cone_depth)
         self.cone_depth = jnp.square(cone_depth)
         self.cone_angle = cone_angle
+        self.damage_cone_depth = damage_cone_depth
         self.damage_cone_angle = damage_cone_angle
         self.damage_per_second = damage_per_second
         self.healing_per_second = healing_per_second
@@ -404,6 +406,9 @@ class GigastepEnv:
         closness_score = (
             jnp.square(x[:, None] - x[None, :]) + jnp.square(y[:, None] - y[None, :])
         ) / (self.cone_depth * agent_states["detection_range"][None, :])
+        closness_score_damage = (
+            jnp.square(x[:, None] - x[None, :]) + jnp.square(y[:, None] - y[None, :])
+        ) / (self.damage_cone_depth * agent_states["detection_range"][None, :])
         angles2 = jnp.arctan2(y[:, None] - y[None, :], x[:, None] - x[None, :])
         angles = (
             jnp.fmod(
@@ -422,7 +427,8 @@ class GigastepEnv:
             stochastic_detected = in_cone_score < rand
         else:
             stochastic_detected = closness_score <= 1 & in_cone
-
+        shoot_target = in_damage_cone <= 1 & in_damage_cone
+        
         # Check if agents can see each other (not same team and alive)
         can_detect = (
             (teams[:, None] != teams[None, :])
@@ -431,10 +437,11 @@ class GigastepEnv:
         )
         # Probabilistic detection
         has_detected = can_detect & ((very_close == 1) | stochastic_detected)
+        has_shooted = can_detect & shoot_target & has_detected
 
         # Check if agents are in the cone of vision of another agent
         has_detected = has_detected.astype(jnp.float32)
-        deal_damage = has_detected * in_damage_cone
+        deal_damage = has_shooted * in_damage_cone
 
         seen = jnp.sum(has_detected, axis=1)  # can be greater than 1
         takes_damage = jnp.sum(deal_damage, axis=1)  # can be greater than 1
@@ -475,10 +482,10 @@ class GigastepEnv:
         reward = jnp.zeros_like(hit_waypoint)
         ### REWARDS ###
         if self.reward_defeat_one_opponent>0:
-            reward = reward +  (alive_team1 - alive_team1_pre) * (teams == 0) * alive \
-                     - (alive_team2 - alive_team2_pre) * (teams == 0) * alive + \
-                    -(alive_team1 - alive_team1_pre) * (teams == 1) * alive \
-                    + (alive_team2 - alive_team2_pre) * (teams == 1) * alive
+            reward = reward +  (alive_team1 - alive_team1_pre) * (teams == 0) * alive / (alive_team1 + 1) \
+                     - (alive_team2 - alive_team2_pre) * (teams == 0) * alive / (alive_team1 + 1)  \
+                    -(alive_team1 - alive_team1_pre) * (teams == 1) * alive / (alive_team2 +1) \
+                    + (alive_team2 - alive_team2_pre) * (teams == 1) * alive / (alive_team2 +1)
 
         # Positive reward for detecting other agents
 
@@ -505,7 +512,7 @@ class GigastepEnv:
                 * self.collision_penalty
                 * alive
             )
-        # TODO: add reward other rewards here for disabling other agents and exploration here
+        # TODO: add other rewards here for disabling other agents and exploration here
 
         # Positive reward for winning the game (weighted by number of agents)
         game_won_reward = (

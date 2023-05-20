@@ -406,7 +406,7 @@ class GigastepEnv:
         closness_score = (
             jnp.square(x[:, None] - x[None, :]) + jnp.square(y[:, None] - y[None, :])
         ) / (self.cone_depth * agent_states["detection_range"][None, :])
-        closness_score_damage = (
+        closeness_score_damage = (
             jnp.square(x[:, None] - x[None, :]) + jnp.square(y[:, None] - y[None, :])
         ) / (self.damage_cone_depth * agent_states["detection_range"][None, :])
         angles2 = jnp.arctan2(y[:, None] - y[None, :], x[:, None] - x[None, :])
@@ -427,7 +427,7 @@ class GigastepEnv:
             stochastic_detected = in_cone_score < rand
         else:
             stochastic_detected = closness_score <= 1 & in_cone
-        shoot_target = in_damage_cone <= 1 & in_damage_cone
+        shoot_target = closeness_score_damage <= 1 & in_damage_cone
         
         # Check if agents can see each other (not same team and alive)
         can_detect = (

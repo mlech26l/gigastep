@@ -511,14 +511,16 @@ class GigastepEnv:
 
         # Negative reward for collisions, going out of bounds and hitting boxes
         # Negative reward for dying (health drops to 0)
+
+        # TODO  This reward can not detect collisions with other agents
         if self.reward_collision>0:
             reward = (
-            reward
-                - (collided + out_of_bounds + hit_box) # confilict with takes damage (health <= 0).astype(jnp.float32))
+                    reward - (collided + out_of_bounds + hit_box)  # confilict with takes damage (health <= 0).astype(jnp.float32))
                 * self.collision_penalty
                 * alive
                 * self.reward_collision
             )
+
         # TODO: add other rewards here for disabling other agents and exploration here
 
         # Positive reward for winning the game (weighted by number of agents alive)

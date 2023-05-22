@@ -195,6 +195,12 @@ _builtin_scenarios = {
         "map": "two_rooms1",
     },
     # Large scale scenarios
+    "identical_50_vs_50": {
+        "team_0": {"default": 100},
+        "team_1": {"default": 100},
+        "map": "empty",
+        "map_size": (20, 20),
+    },
     "identical_100_vs_100": {
         "team_0": {"default": 100},
         "team_1": {"default": 100},

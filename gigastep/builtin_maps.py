@@ -23,8 +23,8 @@ def flip_start_pos(map):
 _builtin_maps = {}
 _builtin_maps["empty"] = {
     "boxes": jnp.zeros((0, 4), dtype=jnp.float32),
-    "start_pos_team_a": jnp.array([0, 0, 3, 10], dtype=jnp.float32),
-    "start_pos_team_b": jnp.array([7, 0, 10, 10], dtype=jnp.float32),
+    "start_pos_team_a": jnp.array([1, 1, 3, 9], dtype=jnp.float32),
+    "start_pos_team_b": jnp.array([7, 1, 9, 9], dtype=jnp.float32),
     "start_height": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
@@ -38,8 +38,8 @@ _builtin_maps["two_rooms1"] = {
         ],
         dtype=jnp.float32,
     ),
-    "start_pos_team_a": jnp.array([0, 0, 10, 3], dtype=jnp.float32),
-    "start_pos_team_b": jnp.array([0, 7, 10, 10], dtype=jnp.float32),
+    "start_pos_team_a": jnp.array([1, 1, 9, 3], dtype=jnp.float32),
+    "start_pos_team_b": jnp.array([1, 7, 9, 9], dtype=jnp.float32),
     "start_height": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
@@ -55,8 +55,8 @@ _builtin_maps["four_rooms"] = {
         ],
         dtype=jnp.float32,
     ),
-    "start_pos_team_a": jnp.array([0, 0, 10, 3], dtype=jnp.float32),
-    "start_pos_team_b": jnp.array([0, 7, 10, 10], dtype=jnp.float32),
+    "start_pos_team_a": jnp.array([1, 1, 9, 3], dtype=jnp.float32),
+    "start_pos_team_b": jnp.array([1, 7, 9, 9 ], dtype=jnp.float32),
     "start_height": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
@@ -69,8 +69,8 @@ _builtin_maps["center_block"] = {
         ],
         dtype=jnp.float32,
     ),
-    "start_pos_team_a": jnp.array([0, 0, 10, 3], dtype=jnp.float32),
-    "start_pos_team_b": jnp.array([0, 7, 10, 10], dtype=jnp.float32),
+    "start_pos_team_a": jnp.array([1, 1, 9, 3], dtype=jnp.float32),
+    "start_pos_team_b": jnp.array([1, 7, 9, 9 ], dtype=jnp.float32),
     "start_height": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
@@ -125,12 +125,12 @@ _builtin_maps["tiles"] = jnp.array(
     ],
     dtype=jnp.float32,
 )
-_builtin_maps["center_block"] = jnp.array(
-    [
-        [3.8, 3.8, 6.2, 6.2],
-    ],
-    dtype=jnp.float32,
-)
+# _builtin_maps["center_block"] = jnp.array(
+#     [
+#         [3.8, 3.8, 6.2, 6.2],
+#     ],
+#     dtype=jnp.float32,
+# )
 _builtin_maps["center_block2"] = jnp.array(
     [
         [3, 3, 5, 5],
@@ -176,6 +176,8 @@ def get_builtin_maps(maps, limits):
             "empty": _builtin_maps["empty"],
             "empty_flipped": _builtin_maps["empty_flipped"],
         }
+    elif maps in _builtin_maps.keys():
+        list_of_maps = {maps: _builtin_maps[maps]}
     else:
         raise ValueError(f"Unknown map name {maps}")
 

@@ -13,7 +13,8 @@ class ScenarioBuilder:
         self._map_size = None
 
     def set_map(self, map, map_size=None):
-        if map not in ("all", "empty"):
+        if map not in ("all", "empty", "two_rooms1",
+                       "four_rooms", "center_block"):
             raise ValueError(f"Unknown map {map}")
         self._map = map
         if map_size is not None:
@@ -121,6 +122,11 @@ _builtin_scenarios = {
         "team_1": {"tank": 1, "sniper": 1, "scout": 1, "boss": 1, "default": 1},
         "map": "empty",
     },
+    "identical_2_vs_2": {
+        "team_0": {"default": 2},
+        "team_1": {"default": 2},
+        "map": "empty",
+    },
     "identical_5_vs_1": {
         "team_0": {"default": 5},
         "team_1": {"boss": 1},
@@ -178,11 +184,44 @@ _builtin_scenarios = {
         "team_1": {"default": 5},
         "map": "center_block",
     },
+    "identical_2_vs_2_center_block": {
+        "team_0": {"default": 2},
+        "team_1": {"default": 2},
+        "map": "center_block",
+    },
     "identical_5_vs_5_two_rooms1": {
         "team_0": {"default": 5},
         "team_1": {"default": 5},
         "map": "two_rooms1",
     },
+    # Large scale scenarios
+    "identical_50_vs_50": {
+        "team_0": {"default": 100},
+        "team_1": {"default": 100},
+        "map": "empty",
+        "map_size": (20, 20),
+    },
+    "identical_100_vs_100": {
+        "team_0": {"default": 100},
+        "team_1": {"default": 100},
+        "map": "empty",
+        "map_size": (100, 100),
+    },
+    "identical_1000_vs_1000": {
+        "team_0": {"default": 1000},
+        "team_1": {"default": 1000},
+        "map": "empty",
+        "map_size": (1000, 1000),
+    },
+    "identical_10000_vs_10000": {
+        "team_0": {"default": 10000},
+        "team_1": {"default": 10000},
+        "map": "empty",
+        "map_size": (10000, 10000),
+    },
+    # Todo: exploration, battle, hide, tag maps
+
+
 }
 
 

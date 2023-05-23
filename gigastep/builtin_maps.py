@@ -23,8 +23,8 @@ def flip_start_pos(map):
 _builtin_maps = {}
 _builtin_maps["empty"] = {
     "boxes": jnp.zeros((0, 4), dtype=jnp.float32),
-    "start_pos_team_a": jnp.array([1, 1, 3, 9], dtype=jnp.float32),
-    "start_pos_team_b": jnp.array([7, 1, 9, 9], dtype=jnp.float32),
+    "start_pos_team_a": jnp.array([1, 1, 4, 9], dtype=jnp.float32),
+    "start_pos_team_b": jnp.array([6, 1, 9, 9], dtype=jnp.float32),
     "start_height": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),

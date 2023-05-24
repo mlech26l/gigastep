@@ -3,12 +3,14 @@ Call with the following command
 XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 python examples/train_gigastep.py
 # Example usage: CUDA_VISIBLE_DEVICES=0  XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 python examples/train_gigastep.py
 """
+import argparse
 import numpy as np
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 from gym.spaces import Dict as GymDict, Box
 from gigastep import make_scenario
 from marllib import marl
 from marllib.envs.base_env import ENV_REGISTRY
+from marllib.envs.global_reward_env import COOP_ENV_REGISTRY
 import time
 import jax
 from gigastep import ScenarioBuilder
@@ -36,6 +38,8 @@ policy_mapping_dict = {
     },
 }
 
+USE_VECTOR_OBS = True # False
+
 # must inherited from MultiAgentEnv class
 class RLlibMAGym(MultiAgentEnv):
 
@@ -48,9 +52,15 @@ class RLlibMAGym(MultiAgentEnv):
             builder = ScenarioBuilder()
             builder.add_type(0, "default")
             builder.add_type(1, "default")
-            self.env = builder.make()
+            if USE_VECTOR_OBS:
+                self.env = builder.make(obs_type="vector")
+            else:
+                self.env = builder.make()
         else:
-            self.env = make_scenario(map, **env_config)
+            if USE_VECTOR_OBS:
+                self.env = make_scenario(map, obs_type="vector", **env_config)
+            else:
+                self.env = make_scenario(map, **env_config)
         self.rng = jax.random.PRNGKey(3)
 
         # assume all agent same action/obs space
@@ -66,7 +76,7 @@ class RLlibMAGym(MultiAgentEnv):
             shape=self.env.observation_space.shape,
             dtype=self.env.observation_space.dtype.type)})
         def _gen_agent_id(_prefix):
-            return [f"{_prefix}{_i}" for _i in range(self.env.n_agents//2)]
+            return [f"{_prefix}{_i:02d}" for _i in range(self.env.n_agents//2)]
         self.agents = _gen_agent_id("red_") + _gen_agent_id("blue_")
         self.num_agents = self.env.n_agents
 
@@ -129,19 +139,48 @@ class RLlibMAGym(MultiAgentEnv):
 
 
 if __name__ == '__main__':
-    n_workers = 1
-    local_mode = False # False
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--alg", type=str, default="mappo")
+    parser.add_argument("--n-workers", type=int, default=1, choices=[0, 1])
+    parser.add_argument("--n-envs", type=int, default=5)
+    parser.add_argument("--local-mode", action="store_true", help="Set this if using GPU in JAX")
+    parser.add_argument("--map-name", type=str, default="custom_1_vs_1",
+                        choices=["custom_1_vs_1", "identical_5_vs_5"])
+    args = parser.parse_args()
+
     # if not local_mode:
         # jax.distributed.initialize(num_processes=n_workers)
         # jax.distributed.initialize()
     # register new env
     ENV_REGISTRY["gigastep"] = RLlibMAGym
+    COOP_ENV_REGISTRY["gigastep"] = RLlibMAGym
     # initialize env
-    env = marl.make_env(environment_name="gigastep", map_name="custom_1_vs_1")
+    env = marl.make_env(environment_name="gigastep", map_name=args.map_name)
     # pick mappo algorithms
-    mappo = marl.algos.mappo(hyperparam_source="test")
+    if args.alg == "mappo":
+        alg = marl.algos.mappo(hyperparam_source="test")
+    elif args.alg == "ippo":
+        alg = marl.algos.ippo(hyperparam_source="test")
+    elif args.alg == "matrpo":
+        alg = marl.algos.matrpo(hyperparam_source="test")
+    elif args.alg == "maa2c":
+        alg = marl.algos.maa2c(hyperparam_source="test")
+    elif args.alg == "itrpo":
+        alg = marl.algos.itrpo(hyperparam_source="test")
+    elif args.alg == "ia2c":
+        alg = marl.algos.ia2c(hyperparam_source="test")
+    elif args.alg == "happo":
+        alg = marl.algos.happo(hyperparam_source="test")
+    elif args.alg == "hatrpo":
+        alg = marl.algos.hatrpo(hyperparam_source="test")
+    elif args.alg == "vdppo":
+        alg = marl.algos.vdppo(hyperparam_source="test")
+    elif args.alg == "vda2c":
+        alg = marl.algos.vda2c(hyperparam_source="test")
+    else:
+        raise NotImplementedError
     # customize model
-    model = marl.build_model(env, mappo, {"core_arch": "gru", "hidden_state_size": 128})
+    model = marl.build_model(env, alg, {"core_arch": "gru", "hidden_state_size": 128})
     # start learning
-    mappo.fit(env, model, stop={'episode_reward_mean': 2000, 'timesteps_total': 10000000}, local_mode=local_mode, num_gpus=1,
-              num_workers=n_workers, num_envs_per_worker=5, share_policy='all', checkpoint_freq=50)
+    alg.fit(env, model, stop={'episode_reward_mean': 2000, 'timesteps_total': 1000000}, local_mode=args.local_mode, num_gpus=1,
+            num_workers=args.n_workers, num_envs_per_worker=args.n_envs, share_policy='all', checkpoint_freq=50)

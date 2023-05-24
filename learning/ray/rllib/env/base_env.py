@@ -392,7 +392,6 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
     def __init__(self, make_env: Callable[[int], EnvType],
                  existing_envs: List["MultiAgentEnv"], num_envs: int):
         self.make_env = make_env
-        self.tmp = existing_envs[0] # DEBUG
         self.envs = [existing_envs[0].env] # from MarllibEnv to gigastep env
         self.num_envs = num_envs
 
@@ -449,7 +448,10 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
         for env_id in range(self.num_envs):
             action.append([])
             for agent_id in self.agent_ids:
-                action[-1].append(action_dict[env_id][agent_id])
+                if agent_id not in action_dict[env_id].keys():
+                    action[-1].append(jnp.zeros(self.envs[0].action_space.shape, dtype=jnp.float32))
+                else:
+                    action[-1].append(action_dict[env_id][agent_id])
         action = jnp.asarray(action)
 
         self.rng, self.key_step = jax.random.split(self.rng, 2)

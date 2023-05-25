@@ -403,7 +403,7 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
         self.initialized = False
 
         self.n_agents = self.envs[0].n_agents
-        team_names_bank = ["red", "blue", "green", "yellow"]
+        team_names_bank = ["red", "blue", "green", "yellow"] # TODO: should get from the env
         team_infos = dict()
         self.agent_ids = []
         for i in range(self.n_agents):
@@ -433,8 +433,8 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
             self.initialized = True
 
         observations = self._vdata_to_multi_env_dict(self.last_obs, to_numpy=True, key_name="obs")
-        rewards = self._vdata_to_multi_env_dict(self.last_rewards, to_item=True)
-        dones = self._vdata_to_multi_env_dict(self.last_dones, to_item=True)
+        rewards = self._vdata_to_multi_env_dict(self.last_rewards, to_item=True, skip_by_done=False)
+        dones = self._vdata_to_multi_env_dict(self.last_dones, to_item=True, skip_by_done=False)
         for env_id in range(self.num_envs):
             dones[env_id]["__all__"] = self.ep_dones[env_id].item()
 
@@ -467,8 +467,7 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
             # TODO: will also reset env other the one with env_id
             self.last_state, self.last_obs = self.envs[0].reset_done_episodes(
                 self.last_state, self.last_obs, self.ep_dones, self.key_reset)
-            # NOTE: using reset only won't work
-            # self.last_state[env_id], self.last_obs[env_id] = self.envs[0].reset(self.key_reset)
+            self.ep_dones = self.ep_dones.at[env_id].set(False)
         
         obs = self._vdata_to_multi_env_dict(self.last_obs, to_numpy=True, key_name="obs")
         obs = obs[env_id] # TODO: HACK: may be slow
@@ -487,7 +486,7 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
         assert env_id == 0
         return self.envs[env_id].render()
     
-    def _vdata_to_multi_env_dict(self, vdata, to_item=False, to_numpy=False, key_name=None):
+    def _vdata_to_multi_env_dict(self, vdata, to_item=False, to_numpy=False, key_name=None, skip_by_done=True):
         assert vdata.shape[0] == self.num_envs
         assert vdata.shape[1] == self.n_agents
 
@@ -495,14 +494,15 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
         for env_id in range(self.num_envs):
             multi_env_dict[env_id] = dict()
             for agent_idx, agent_id in enumerate(self.agent_ids):
-                datum = vdata[env_id][agent_idx]
+                datum = vdata[env_id, agent_idx]
                 if to_item:
                     datum = datum.item()
                 if to_numpy:
                     datum = np.asarray(datum)
                 if key_name is not None:
                     datum = {key_name: datum}
-                multi_env_dict[env_id][agent_id] = datum
+                if not skip_by_done or not self.last_dones[env_id, agent_idx]:
+                    multi_env_dict[env_id][agent_id] = datum
         
         return multi_env_dict
 

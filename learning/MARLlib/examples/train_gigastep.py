@@ -1,7 +1,7 @@
 """
 Call with the following command
 XLA_PYTHON_CLIENT_PREALLOCATE=false XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 python examples/train_gigastep.py
-# Example usage: CUDA_VISIBLE_DEVICES=0  XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 python examples/train_gigastep.py
+# Example usage: CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 python examples/train_gigastep.py
 """
 import argparse
 import numpy as np

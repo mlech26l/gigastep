@@ -29,13 +29,14 @@ algo_args:
   lambda: 1.0
   kl_coeff: 0.2
   batch_episode: 2
-  num_sgd_iter: 2
-  vf_loss_coeff: 1.0
-  lr: 0.0005
-  entropy_coeff: 0.01
+  num_sgd_iter: 2 # 4; suppose it corresponds to num_mini_batch
+  vf_loss_coeff: 1.0 # 0.5
+  lr: 0.0005 # 0.0004
+  entropy_coeff: 0.01 # the same
   clip_param: 0.3
   vf_clip_param: 10.0
-  batch_mode: "truncate_episodes" # "complete_episodes"
-  # train_batch_size: 4000
-
+  batch_mode: "complete_episodes" # "truncate_episodes"
+  train_batch_size: 40 # 20*2; suppose it corresponds to batch_size
+  sgd_minibatch_size: 16 # suppose it corresponds to num_steps
+  # no match with use_linear_lr_decay (True), max_grad_norm (0.1)
 

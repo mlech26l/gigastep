@@ -392,87 +392,25 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
     def __init__(self, make_env: Callable[[int], EnvType],
                  existing_envs: List["MultiAgentEnv"], num_envs: int):
         self.make_env = make_env
-        self.envs = [existing_envs[0].env] # from MarllibEnv to gigastep env
+        assert len(existing_envs) == 1, "Must be one env only"
+        self.envs = existing_envs
         self.num_envs = num_envs
 
-        self.rng = jax.random.PRNGKey(3)
-        self.rng, self.key_reset = jax.random.split(self.rng, 2)
-        self.key_reset = jax.random.split(self.key_reset, self.num_envs)
-        self.key_step = None
-
-        self.initialized = False
-
-        self.n_agents = self.envs[0].n_agents
-        team_names_bank = ["red", "blue", "green", "yellow"] # TODO: should get from the env
-        team_infos = dict()
-        self.agent_ids = []
-        for i in range(self.n_agents):
-            team_id = self.envs[0].teams[i].item()
-            if team_id not in team_infos.keys():
-                team_infos[team_id] = dict(
-                    name=team_names_bank.pop(0),
-                    member_cnt=0,
-                )
-            team_info = team_infos[team_id]
-            self.agent_ids.append("{}_{:02d}".format(team_info["name"], team_info["member_cnt"]))
-            team_info["member_cnt"] += 1
-
-        self.ep_dones = jnp.zeros(self.num_envs, dtype=jnp.bool_) # env-level done
-        self.last_state = None # the latest internal environment state
-        self.last_obs = None # the latest observation [num_envs, n_agents, ...]
-        self.last_rewards = None # the latest reward [num_envs, n_agents]
-        self.last_dones = None # the latest agent-level done [num_envs, n_agents]
+        self.envs[0].set_num_envs(num_envs)
 
     @override(BaseEnv)
     def poll(self) -> Tuple[MultiEnvDict, MultiEnvDict, MultiEnvDict,
                             MultiEnvDict, MultiEnvDict]:
-        if not self.initialized:
-            self.last_state, self.last_obs = self.envs[0].v_reset(self.key_reset)
-            self.last_rewards = jnp.zeros((self.num_envs, self.n_agents), dtype=jnp.float32)
-            self.last_dones = jnp.zeros((self.num_envs, self.n_agents), dtype=jnp.bool_)
-            self.initialized = True
-
-        observations = self._vdata_to_multi_env_dict(self.last_obs, to_numpy=True, key_name="obs")
-        rewards = self._vdata_to_multi_env_dict(self.last_rewards, to_item=True, skip_by_done=False)
-        dones = self._vdata_to_multi_env_dict(self.last_dones, to_item=True, skip_by_done=False)
-        for env_id in range(self.num_envs):
-            dones[env_id]["__all__"] = self.ep_dones[env_id].item()
-
-        infos = {env_id: {} for env_id in range(self.num_envs)}
-
-        return observations, rewards, dones, infos, {}
+        return self.envs[0].poll()
 
     @override(BaseEnv)
     def send_actions(self, action_dict: MultiEnvDict) -> None:
-        action = []
-        for env_id in range(self.num_envs):
-            action.append([])
-            for agent_id in self.agent_ids:
-                if agent_id not in action_dict[env_id].keys():
-                    action[-1].append(jnp.zeros(self.envs[0].action_space.shape, dtype=jnp.float32))
-                else:
-                    action[-1].append(action_dict[env_id][agent_id])
-        action = jnp.asarray(action)
-
-        self.rng, self.key_step = jax.random.split(self.rng, 2)
-        self.key_step = jax.random.split(self.key_step, self.num_envs)
-        self.last_state, self.last_obs, self.last_rewards, self.last_dones, self.ep_dones \
-            = self.envs[0].v_step(self.last_state, action, self.key_step)
+        self.envs[0].send_actions(action_dict)
 
     @override(BaseEnv)
     def try_reset(self,
                   env_id: Optional[EnvID] = None) -> Optional[MultiAgentDict]:
-        if self.ep_dones[env_id].item():
-            self.rng, self.key_reset = jax.random.split(self.rng, 2)
-            # TODO: will also reset env other the one with env_id
-            self.last_state, self.last_obs = self.envs[0].reset_done_episodes(
-                self.last_state, self.last_obs, self.ep_dones, self.key_reset)
-            self.ep_dones = self.ep_dones.at[env_id].set(False)
-        
-        obs = self._vdata_to_multi_env_dict(self.last_obs, to_numpy=True, key_name="obs")
-        obs = obs[env_id] # TODO: HACK: may be slow
-
-        return obs
+        return self.envs[0].try_reset(env_id)
 
     @override(BaseEnv)
     def get_unwrapped(self) -> List[EnvType]:
@@ -485,26 +423,6 @@ class _MultiAgentVMapEnvToBaseEnv(BaseEnv):
         assert isinstance(env_id, int)
         assert env_id == 0
         return self.envs[env_id].render()
-    
-    def _vdata_to_multi_env_dict(self, vdata, to_item=False, to_numpy=False, key_name=None, skip_by_done=True):
-        assert vdata.shape[0] == self.num_envs
-        assert vdata.shape[1] == self.n_agents
-
-        multi_env_dict = dict()
-        for env_id in range(self.num_envs):
-            multi_env_dict[env_id] = dict()
-            for agent_idx, agent_id in enumerate(self.agent_ids):
-                datum = vdata[env_id, agent_idx]
-                if to_item:
-                    datum = datum.item()
-                if to_numpy:
-                    datum = np.asarray(datum)
-                if key_name is not None:
-                    datum = {key_name: datum}
-                if not skip_by_done or not self.last_dones[env_id, agent_idx]:
-                    multi_env_dict[env_id][agent_id] = datum
-        
-        return multi_env_dict
 
 
 class _MultiAgentEnvToBaseEnv(BaseEnv):

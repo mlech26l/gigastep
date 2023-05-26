@@ -2,6 +2,8 @@ env: gigastep
 
 env_args:
   map_name: "identical_5_vs_5"
+  obs_type: "vector"
+  seed: 42
 
 mask_flag: False
 global_state_flag: False

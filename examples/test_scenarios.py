@@ -21,7 +21,8 @@ def loop_env(env):
         state, obs = env.reset(key)
         ep_done = False
         t = 0
-        while not ep_done and t < 50:
+        # while not ep_done and t < 50:
+        while True:
             rng, key = jax.random.split(rng, 2)
             action = jax.random.uniform(
                 key, shape=(env.n_agents, 3), minval=-1, maxval=1
@@ -38,7 +39,8 @@ def loop_env(env):
                     time.sleep(SLEEP_TIME)
                     if viewer.should_pause:
                         break
-
+            if viewer.should_reset:
+                break
             if viewer.should_quit:
                 sys.exit(1)
             time.sleep(SLEEP_TIME)

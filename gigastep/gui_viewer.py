@@ -22,11 +22,7 @@ class GigastepViewer:
     display = None
 
     def __init__(
-        self,
-        frame_size,
-        show_global_state=True,
-        show_num_agents=1,
-        headless = False
+        self, frame_size, show_global_state=True, show_num_agents=1, headless=False
     ):
         # only import pygame if the viewer is used
         try:
@@ -152,6 +148,7 @@ class GigastepViewer:
         for i in range(self.show_num_agents):
             obs_1 = obs[i]
             obs_1 = np.array(obs_1, dtype=np.uint8)
+            obs_1 = np.maximum(obs_1, 255 * (1 - state[0]["alive"][i]))
             # obs_1 = self.cv2.cvtColor(np.array(obs_1), self.cv2.COLOR_RGB2BGR)
             obs_1 = self.cv2.resize(
                 obs_1,

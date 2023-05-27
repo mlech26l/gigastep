@@ -724,6 +724,9 @@ class GigastepEnv:
             rgb_obs = draw_agents_from_ego(
                 rgb_obs, x, y, z, teams, seen, agent_id, agent_states["sprite"]
             )
+            # rgb_obs = jnp.maximum(
+            #     rgb_obs, 255 * (1 - alive[agent_id].astype(jnp.uint8))
+            # )
         if "vector" in self._obs_type:
             # sort by distance from ego
             distance = jnp.sqrt(

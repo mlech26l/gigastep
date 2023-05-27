@@ -17,42 +17,35 @@ def loop_env(env):
     viewer = GigastepViewer(84 * 2, show_num_agents=env.n_agents)
     rng = jax.random.PRNGKey(3)
 
-    key, rng = jax.random.split(rng, 2)
-    frame_idx = 0
-    os.makedirs("video/scenario", exist_ok=True)
-    while True:
-        for opponent in evaluator:
-            state, obs = env.reset(key)
+    for opponent in evaluator.policies:
+        print("Opponent", str(opponent))
+        for ep_idx in range(5):
             ep_done = False
-            t = 0
+            key, rng = jax.random.split(rng, 2)
+            state, obs = env.reset(key)
             while not ep_done:
                 rng, key, key2 = jax.random.split(rng, 3)
-                action_ego = jnp.zeros((env.n_agents, 3))
+                action_ego = jnp.zeros((env.n_agents, 3))  # ego does nothing
                 action_opp = opponent.apply(obs, key2)
 
                 action = evaluator.merge_actions(action_ego, action_opp)
 
                 rng, key = jax.random.split(rng, 2)
-                state, obs, r, a, d = env.step(state, action, key)
-                evaluator.update_reward(r, a, d)
+                state, obs, r, dones, ep_done = env.step(state, action, key)
+                evaluator.update_step(r, dones, ep_done)
 
                 img = viewer.draw(env, state, obs)
-
-                img = img[0 : 2 * img.shape[0] // 3]
-                # cv2.imwrite(f"video/scenario/frame_{frame_idx:04d}.png", img)
                 if viewer.should_pause:
                     while True:
                         img = viewer.draw(env, state, obs)
                         time.sleep(SLEEP_TIME)
                         if viewer.should_pause:
                             break
-                if viewer.should_reset:
-                    break
                 if viewer.should_quit:
                     sys.exit(1)
                 time.sleep(SLEEP_TIME)
-                t += 1
-                frame_idx += 1
+            evaluator.update_episode()
+            print(str(evaluator))
             # if frame_idx > 400:
             #     sys.exit(1)
 

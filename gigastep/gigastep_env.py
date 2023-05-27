@@ -85,7 +85,7 @@ class GigastepEnv:
         healing_per_second=0.3,
         use_stochastic_obs=True,
         use_stochastic_comm=True,
-        enable_waypoints=True,
+        enable_waypoints=False,
         collision_range=0.4,
         collision_altitude=0.5,
         collision_penalty=10,
@@ -103,12 +103,12 @@ class GigastepEnv:
         per_agent_team=None,
         tagged_penalty=5,
         team_reward=0,
-        reward_game_won = 1,
-        reward_defeat_one_opponent = 1,
-        reward_detection = 1,
-        reward_damage = 1,
-        reward_idle = 1,
-        reward_collision = 1,
+        reward_game_won=1,
+        reward_defeat_one_opponent=1,
+        reward_detection=1,
+        reward_damage=1,
+        reward_idle=1,
+        reward_collision=1,
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
@@ -142,7 +142,6 @@ class GigastepEnv:
         self.reward_idle = reward_idle
         self.reward_collision = reward_collision
 
-
         if per_agent_sprites is None:
             per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)
         self._per_agent_sprites = per_agent_sprites
@@ -168,11 +167,11 @@ class GigastepEnv:
                 [jnp.ones((team_blue,)), jnp.zeros((team_red,))], axis=0
             )
         self._per_agent_team = per_agent_team
-        n_ego_agents = 0 
+        n_ego_agents = 0
         n_opponents = 0
         for i in self._per_agent_team:
-            if i==0:
-                n_ego_agents += 1 
+            if i == 0:
+                n_ego_agents += 1
             else:
                 n_opponents += 1
         self.n_teams = [n_ego_agents, n_opponents]
@@ -220,9 +219,11 @@ class GigastepEnv:
             # 3x3x3 = 27 actions {+1, 0, -1}^3
             self.action_space = Discrete(3**3)
             self.action_lut = jnp.array(
-                jnp.meshgrid(jnp.array([-1., 0., 1.]),
-                             jnp.array([-1., 0., 1.]),
-                             jnp.array([-1., 0., 1.]))
+                jnp.meshgrid(
+                    jnp.array([-1.0, 0.0, 1.0]),
+                    jnp.array([-1.0, 0.0, 1.0]),
+                    jnp.array([-1.0, 0.0, 1.0]),
+                )
             ).T.reshape(-1, 3)
         else:
             self.action_space = Box(low=-jnp.ones(3), high=jnp.ones(3))
@@ -316,7 +317,7 @@ class GigastepEnv:
         z = agent_states["z"]
         alive = agent_states["alive"]
         teams = agent_states["team"]
-        
+
         # Previous alive agents
         alive_team1_pre = jnp.sum(alive * (teams == 0))
         alive_team2_pre = jnp.sum(alive * (teams == 1))
@@ -430,7 +431,7 @@ class GigastepEnv:
         else:
             stochastic_detected = closness_score <= 1 & in_cone
         shoot_target = closeness_score_damage <= 1 & in_damage_cone
-        
+
         # Check if agents can see each other (not same team and alive)
         can_detect = (
             (teams[:, None] != teams[None, :])
@@ -483,38 +484,67 @@ class GigastepEnv:
 
         reward = jnp.zeros_like(hit_waypoint)
         ### REWARDS ###
-        if self.reward_defeat_one_opponent>0:
-            reward += self.reward_defeat_one_opponent*( 
-                    (alive_team1 - alive_team1_pre) * (teams == 0) * alive / (alive_team1 + 1)  \
-                    - (alive_team2 - alive_team2_pre) * (teams == 0) * alive / (alive_team1 + 1)   \
-                    - (alive_team1 - alive_team1_pre) * (teams == 1) * alive / (alive_team2 + 1) \
-                    + (alive_team2 - alive_team2_pre) * (teams == 1) * alive / (alive_team2 + 1)
-                    )
+        if self.reward_defeat_one_opponent > 0:
+            reward += self.reward_defeat_one_opponent * (
+                (alive_team1 - alive_team1_pre)
+                * (teams == 0)
+                * alive
+                / (alive_team1 + 1)
+                - (alive_team2 - alive_team2_pre)
+                * (teams == 0)
+                * alive
+                / (alive_team1 + 1)
+                - (alive_team1 - alive_team1_pre)
+                * (teams == 1)
+                * alive
+                / (alive_team2 + 1)
+                + (alive_team2 - alive_team2_pre)
+                * (teams == 1)
+                * alive
+                / (alive_team2 + 1)
+            )
 
-
-        if self.reward_detection>0:
+        if self.reward_detection > 0:
             reward = hit_waypoint
             # Positive reward for detecting other agents
-            reward = reward + self.reward_detection * 0.5 * detected_other_agent * self.time_delta * alive
+            reward = (
+                reward
+                + self.reward_detection
+                * 0.5
+                * detected_other_agent
+                * self.time_delta
+                * alive
+            )
             # Negative reward for being detected (weighted less than detecting to encourage exploration)
-            reward = reward - self.reward_detection * 0.2 * seen * self.time_delta * alive
-            
-        if self.reward_damage>0:
+            reward = (
+                reward - self.reward_detection * 0.2 * seen * self.time_delta * alive
+            )
+
+        if self.reward_damage > 0:
             # Positive reward for dealing damage to other agents
-            reward = reward + self.reward_damage * damages_other_agent * self.time_delta * alive
+            reward = (
+                reward
+                + self.reward_damage * damages_other_agent * self.time_delta * alive
+            )
             # Negative reward for taking damage from other agents
-            reward = reward - self.reward_damage * 0.5 * takes_damage * self.time_delta * alive
+            reward = (
+                reward
+                - self.reward_damage * 0.5 * takes_damage * self.time_delta * alive
+            )
 
         # Negative reward for being idle
-        if self.reward_idle>0:
+        if self.reward_idle > 0:
             reward = reward - self.reward_idle * 0.01 * self.time_delta * alive
 
         # Negative reward for collisions, going out of bounds and hitting boxes
         # Negative reward for dying (health drops to 0)
 
-        if self.reward_collision>0:
+        if self.reward_collision > 0:
             reward = (
-                    reward - (collided + out_of_bounds + hit_box)  # Todo confilict with takes damage (health <= 0).astype(jnp.float32))
+                reward
+                - (
+                    collided + out_of_bounds + hit_box
+                )  # Todo confilict with takes damage (health <= 0).astype(jnp.float32))
                 * self.collision_penalty
                 * alive
                 * self.reward_collision
@@ -522,15 +552,17 @@ class GigastepEnv:
         # TODO: add other rewards here for disabling other agents and exploration here
 
         # Positive reward for winning the game (weighted by number of agents alive)
-        game_won_reward = (
-              (alive_team2 == 0) * (teams == 0) * alive
-            + (alive_team1 == 0) * (teams == 1) * alive
-        )
+        game_won_reward = (alive_team2 == 0) * (teams == 0) * alive + (
+            alive_team1 == 0
+        ) * (teams == 1) * alive
         # Enable curriculum learning by scaling the auxiliary reward
         # if aux factor is set to zero only the end of the winning of the game will give a reward
-        reward = map_state["aux_rewards_factor"] * reward + self.reward_game_won * game_won_reward
+        reward = (
+            map_state["aux_rewards_factor"] * reward
+            + self.reward_game_won * game_won_reward
+        )
         # normalize reward to number of agents. Make the reward in a similar level for different number of agents
-        reward = reward  / self.n_agents
+        reward = reward / self.n_agents
 
         agent_states = {
             "x": x,
@@ -591,7 +623,7 @@ class GigastepEnv:
         else:
             seen = has_detected + jnp.eye(has_detected.shape[0]) * (
                 teams[agent_id] == teams[None, :]
-            )
+            ) * (alive[None, :] > 0)
         seen = jnp.sum(seen, axis=1) > 0
 
         rgb_obs, vector_obs = None, None
@@ -706,13 +738,13 @@ class GigastepEnv:
 
             sorted_indices = jnp.argsort(ranking).flatten()
             relative_team = (
-                    agent_states["team"] == agent_states["team"][agent_id]
+                agent_states["team"] == agent_states["team"][agent_id]
             ).astype(jnp.float32)
             relative_x = agent_states["x"] - agent_states["x"][agent_id]
             relative_y = agent_states["y"] - agent_states["y"][agent_id]
             relative_z = agent_states["z"] - agent_states["z"][agent_id]
             relative_heading = (
-                    agent_states["heading"] - agent_states["heading"][agent_id]
+                agent_states["heading"] - agent_states["heading"][agent_id]
             )
             relative_v = agent_states["v"] - agent_states["v"][agent_id]
             relative_heading = jnp.fmod(relative_heading + jnp.pi, 2 * jnp.pi) - jnp.pi

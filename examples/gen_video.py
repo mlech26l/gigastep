@@ -41,11 +41,13 @@ def loop_2agents():
         rng, key = jax.random.split(rng, 2)
         state, obs, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
-        save_frame(dyn, state,obs, f"video/2agents/frame_{frame:04d}.png", obs2=True)
+        save_frame(dyn, state, obs, f"video/2agents/frame_{frame:04d}.png", obs2=True)
         frame += 1
 
 
-def save_frame(dyn, state, step_obs, filename, frame_size=4 * 84, obs1=True, obs2=False):
+def save_frame(
+    dyn, state, step_obs, filename, frame_size=4 * 84, obs1=True, obs2=False
+):
     obs = dyn.get_global_observation(state)
     obs = np.array(obs, dtype=np.uint8)
     # obs = cv2.cvtColor(np.array(obs), cv2.COLOR_RGB2BGR)
@@ -82,33 +84,40 @@ def loop_random_agents():
 
     frame = 0
     t = 0
-    while frame<120:
+    while frame < 120:
         state, obs = dyn.reset(key)
         while jnp.sum(dyn.get_dones(state)) > 0:
             rng, key = jax.random.split(rng, 2)
             action = jax.random.uniform(key, shape=(n_agents, 3), minval=-1, maxval=1)
             rng, key = jax.random.split(rng, 2)
             state, obs, r, a, d = dyn.step(state, action, key)
-            save_frame(dyn, state, obs, f"video/random/frame_{frame:04d}.png",obs1=True,obs2=True)
-            viewer.draw(dyn, state,obs)
+            save_frame(
+                dyn,
+                state,
+                obs,
+                f"video/random/frame_{frame:04d}.png",
+                obs1=True,
+                obs2=True,
+            )
+            viewer.draw(dyn, state, obs)
             frame += 1
             t += 1
-            if t>20:
+            if t > 20:
                 t = 0
                 break
-
-
 
 
 def loop_random_many_agents():
     n_agents = 2000
     res = 200
-    dyn = GigastepEnv(n_agents=n_agents,limit_x=50,limit_y=50,resolution_x=res,resolution_y=res)
+    dyn = GigastepEnv(
+        n_agents=n_agents, limit_x=50, limit_y=50, resolution_x=res, resolution_y=res
+    )
     rng = jax.random.PRNGKey(3)
 
     key, rng = jax.random.split(rng, 2)
     os.makedirs("video/many", exist_ok=True)
-    viewer = GigastepViewer(2*res)
+    viewer = GigastepViewer(2 * res)
 
     state, obs = dyn.reset(key)
     frame = 0
@@ -118,13 +127,16 @@ def loop_random_many_agents():
         rng, key = jax.random.split(rng, 2)
         state, obs, r, a, d = dyn.step(state, action, key)
         save_frame(dyn, state, obs, f"video/many/frame_{frame:04d}.png")
-        viewer.draw(dyn, state,obs)
+        viewer.draw(dyn, state, obs)
         frame += 1
+
 
 def loop_visible_debug():
     viewer = GigastepViewer(4 * 84)
 
-    dyn = GigastepEnv(collision_range=0.0, use_stochastic_obs=True, damage_per_second=0)  # disable collision
+    dyn = GigastepEnv(
+        collision_range=0.0, use_stochastic_obs=True, damage_per_second=0
+    )  # disable collision
     rng = jax.random.PRNGKey(3)
     os.makedirs("video/visibility", exist_ok=True)
     frame = 0
@@ -178,7 +190,6 @@ def loop_2agents_altitude():
             break
 
 
-
 def loop_maps():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("10 random agents")
@@ -207,36 +218,25 @@ def loop_maps():
                 break
 
 
-
 def loop_heterogenous():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("3 agents, same thrust but different altitude")
-    dyn = GigastepEnv(use_stochastic_obs=False,use_stochastic_comm=False,very_close_cone_depth=10)
+    dyn = GigastepEnv(
+        use_stochastic_obs=False, use_stochastic_comm=False, very_close_cone_depth=10
+    )
     rng = jax.random.PRNGKey(1)
     frame = 0
     os.makedirs("video/hetero", exist_ok=True)
 
     for i in range(8):
         s1 = GigastepEnv.get_initial_state(
-            x=5,
-            y=5,
-            team=0,
-            heading=np.pi/4,
-            sprite=i
+            x=5, y=5, team=0, heading=np.pi / 4, sprite=i
         )
         s2 = GigastepEnv.get_initial_state(
-            x=7,
-            y=3,
-            team=0,
-            heading=np.pi/4,
-            sprite=i+3%8
+            x=7, y=3, team=0, heading=np.pi / 4, sprite=i + 3 % 8
         )
         s3 = GigastepEnv.get_initial_state(
-            x=3,
-            y=7,
-            team=1,
-            heading=np.pi/4,
-            sprite=i+5%8
+            x=3, y=7, team=1, heading=np.pi / 4, sprite=i + 5 % 8
         )
         state = stack_agents(s1, s2, s3)
         action = jnp.zeros((3, 3))
@@ -244,16 +244,19 @@ def loop_heterogenous():
         state, obs, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         for i in range(5):
-            save_frame(dyn, state, obs, f"video/hetero/frame_{frame:04d}.png", obs1=True)
+            save_frame(
+                dyn, state, obs, f"video/hetero/frame_{frame:04d}.png", obs1=True
+            )
             frame += 1
 
+
 if __name__ == "__main__":
-    # loop_2agents_altitude()
-    # loop_2agents()
-    # loop_visible_debug()
-    # loop_random_agents()
-    # loop_random_many_agents()
-    # loop_maps()
+    loop_2agents_altitude()
+    loop_2agents()
+    loop_visible_debug()
+    loop_random_agents()
+    loop_random_many_agents()
+    loop_maps()
     loop_heterogenous()
     # convert -delay 10 -loop 0 video/random/frame_*.png video/random.gif
     # convert -delay 10 -loop 0 video/2agents/frame_*.png video/2agents.gif

@@ -101,13 +101,14 @@ class GigastepEnv:
         per_agent_max_health=None,
         per_agent_range=None,
         per_agent_team=None,
-        reward_game_won=1,
-        reward_defeat_one_opponent=1,
+        reward_game_won=10,
+        reward_defeat_one_opponent=100,
         reward_detection=0,
-        reward_damage=1,
+        reward_damage=0,
         reward_idle=0,
-        reward_agent_disabled=1,
-        reward_collision=1,
+        reward_agent_disabled=0,
+        reward_collision=0,
+        reward_hit_waypoint=0,
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
@@ -494,6 +495,11 @@ class GigastepEnv:
             "reward_collision": jnp.zeros((self.n_agents,)),
         }
         ### REWARDS ###
+        if self.reward_hit_waypoint>0:
+            reward = self.reward_hit_waypoint * hit_waypoint
+        else:
+            reward = jnp.zeros_like(hit_waypoint)
+
         if self.reward_defeat_one_opponent > 0:
             reward_defeat_one_opponent = (
                 (alive_team1 - alive_team1_pre)

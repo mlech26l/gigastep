@@ -1,26 +1,72 @@
+import sys
+import time
+
 import numpy as np
 import pyhopper
 import jax
 import jax.numpy as jnp
 
-from gigastep import make_scenario
+from gigastep import make_scenario, GigastepViewer
 from gigastep.evaluator import Evaluator
 import seaborn as sns
 import matplotlib.pyplot as plt
+
+SLEEP_TIME = 0.01
+
+
+def replay_policy(env, params):
+    evaluator = Evaluator(env)
+    viewer = GigastepViewer(84 * 4, show_num_agents=0)
+    params = jax.tree_map(lambda x: jnp.array(x), params)
+
+    rng = jax.random.PRNGKey(3)
+
+    for opponent in evaluator.policies:
+        print("Opponent", str(opponent))
+        for ep_idx in range(10):
+            ep_done = False
+            key, rng = jax.random.split(rng, 2)
+            state, obs = env.reset(key)
+            while not ep_done:
+                rng, key, key2 = jax.random.split(rng, 3)
+                x1 = jax.nn.tanh(jnp.dot(obs, params["w1"]) + params["b1"])
+                action_ego = jnp.dot(x1, params["w2"]) + params["b2"]
+
+                action_opp = opponent.apply(obs, key2)
+
+                action = evaluator.merge_actions(action_ego, action_opp)
+
+                rng, key = jax.random.split(rng, 2)
+                state, obs, r, dones, ep_done = env.step(state, action, key)
+                evaluator.update_step(r, dones, ep_done)
+
+                img = viewer.draw(env, state, obs)
+                if viewer.should_pause:
+                    while True:
+                        img = viewer.draw(env, state, obs)
+                        time.sleep(SLEEP_TIME)
+                        if viewer.should_pause:
+                            break
+                if viewer.should_quit:
+                    sys.exit(1)
+                time.sleep(SLEEP_TIME)
+            evaluator.update_episode()
+            print(str(evaluator))
+            # if frame_idx > 400:
+            #     sys.exit(1)
 
 
 def run_n_steps2(params, env):
     evaluator = Evaluator(env)
 
-    batch_size = 16
-    n_steps = 300
+    batch_size = 64
+    n_steps = 200
     opponent = evaluator.policies[-1]
 
     rng = jax.random.PRNGKey(2)
     rng, key = jax.random.split(rng, 2)
     key = jax.random.split(key, batch_size)
     states, obs = env.v_reset(key)
-    states = env.v_set_aux_reward_factor(states, 0.0)
 
     params = jax.tree_map(lambda x: jnp.array(x), params)
     n_agents = states[0]["x"].shape[1]
@@ -30,10 +76,33 @@ def run_n_steps2(params, env):
         states, obs, rng, reward = state_carry
         rng, key, key2 = jax.random.split(rng, 3)
         x1 = jax.nn.tanh(jnp.dot(obs, params["w1"]) + params["b1"])
-        action_ego = jnp.dot(x1, params["w2"]) + params["b2"]
+        action_ego = jax.nn.tanh(jnp.dot(x1, params["w2"]) + params["b2"])
 
         key2 = jax.random.split(key2, batch_size)
-        action_opp = opponent.v_apply(obs, key2)
+        # action_ego = evaluator.policies[-1].v_apply(obs, key2)
+        action_opp = evaluator.policies[0].v_apply(obs, key2)
+        # action_opp = opponent.v_apply(obs, key2)
+        # action_opp = jnp.zeros_like(action_ego)
+
+        actions = evaluator.v_merge_actions(action_ego, action_opp)
+        rng, key = jax.random.split(rng, 2)
+        key = jax.random.split(key, batch_size)
+        states, obs, r, a, d = env.v_step(states, actions, key)
+
+        reward = reward + r
+        carry = [states, obs, rng, reward]
+        return carry, []
+
+    def policy_step2(state_carry, tmp):
+        states, obs, rng, reward = state_carry
+        rng, key, key2 = jax.random.split(rng, 3)
+        x1 = jax.nn.tanh(jnp.dot(obs, params["w1"]) + params["b1"])
+        action_ego = jax.nn.tanh(jnp.dot(x1, params["w2"]) + params["b2"])
+
+        key2 = jax.random.split(key2, batch_size)
+        # action_ego = evaluator.policies[-1].v_apply(obs, key2)
+        # action_opp = jax.nn.tanh(evaluator.policies[0].v_apply(obs, key2))
+        action_opp = evaluator.policies[-1].v_apply(obs, key2)
         # action_opp = jnp.zeros_like(action_ego)
 
         actions = evaluator.v_merge_actions(action_ego, action_opp)
@@ -52,11 +121,36 @@ def run_n_steps2(params, env):
     # print("total agg", carry_out[-1].sum())
     reward = carry_out[-1] * (env.teams[None, :] == 0)
     reward = reward.sum(axis=1).mean()
-    return reward
+
+    rng = jax.random.PRNGKey(3)
+    rng, key = jax.random.split(rng, 2)
+    key = jax.random.split(key, batch_size)
+    states, obs = env.v_reset(key)
+    reward2 = jnp.zeros((batch_size, n_agents))
+    carry_out2, scan_out = jax.lax.scan(
+        policy_step2, [states, obs, rng, reward2], [], length=n_steps
+    )
+    # print("total agg", carry_out[-1].sum())
+    reward2 = carry_out2[-1] * (env.teams[None, :] == 0)
+    reward2 = 2 * reward2.sum(axis=1).mean()
+    # reward_other = carry_out[-1] * (env.teams[None, :] == 1)
+    # reward_other = reward_other.sum(axis=1).mean()
+    # print("reward", reward, "reward_other", reward_other)
+    return reward + reward2
 
 
 if __name__ == "__main__":
-    env = make_scenario("identical_20_vs_20", obs_type="vector")
+    env = make_scenario(
+        "identical_20_vs_20",
+        obs_type="vector",
+        reward_game_won=1,
+        reward_defeat_one_opponent=1,
+        reward_detection=1,
+        reward_damage=1,
+        reward_idle=0,
+        reward_agent_disabled=0,
+        reward_collision=0,
+    )
     params = {
         "w1": jnp.zeros((env.observation_space.shape[0], 10)),
         "b1": jnp.zeros(10),
@@ -73,7 +167,7 @@ if __name__ == "__main__":
         w2=pyhopper.float(shape=(hidden, env.action_space.shape[0])),
         b2=pyhopper.float(shape=(env.action_space.shape[0],)),
     )
-    best_params = search.run(run_n_steps2, "maximize", "2min", kwargs={"env": env})
+    best_params = search.run(run_n_steps2, "maximize", "60min", kwargs={"env": env})
 
     sns.set()
     fig, ax = plt.subplots(figsize=(5, 5))
@@ -89,3 +183,5 @@ if __name__ == "__main__":
     fig.tight_layout()
     fig.savefig("search.png")
     plt.close(fig)
+
+    replay_policy(env, best_params)

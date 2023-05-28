@@ -110,6 +110,30 @@ class CirclePolicy(EvaluatiorPolicy):
         return f"CirclePolicy{self.direction}"
 
 
+class CircleRandomPolicy(EvaluatiorPolicy):
+    def __init__(self, env):
+        self.env = env
+        if self.env.discrete_actions:
+            raise NotImplementedError()
+        self.v_apply = jax.vmap(self.apply, in_axes=(0, 0))
+
+    def apply(self, obs, rng):
+        n_agents = obs.shape[0]
+        directions = (
+            jax.random.randint(
+                jax.random.PRNGKey(1), shape=(n_agents,), minval=0, maxval=2
+            )
+            - 1
+        )
+        actions = jnp.stack(
+            [directions, jnp.zeros(n_agents), jnp.zeros(n_agents)], axis=1
+        )
+        return actions
+
+    def __str__(self):
+        return f"CircleRandomPolicy"
+
+
 class Evaluator:
     def __init__(self, env):
         self.env = env
@@ -117,6 +141,7 @@ class Evaluator:
             RandomPolicy(env),
             CirclePolicy(env),
             CirclePolicy(env, direction=-1),
+            CircleRandomPolicy(env),
         ]
         self._ep_rewards = []
         self._ep_alives = []

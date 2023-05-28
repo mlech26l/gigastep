@@ -19,7 +19,7 @@ def test_scenario20v20():
     state, obs, rewards, dones, ep_done = env.step(state, action, key_step)
 
 
-def test_scenario20v20_test_scenario20v20_debug_reward():
+def test_scenario20v20_debug_reward():
     env = make_scenario("identical_20_vs_20", debug_reward=True)
     rng = jax.random.PRNGKey(3)
     rng, key_reset = jax.random.split(rng, 2)

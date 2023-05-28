@@ -71,6 +71,14 @@ class Evaluator:
         self.team_b_wins = 0
         self.total_games = 0
 
+    @property
+    def win_rate_a(self):
+        return self.team_a_wins * 100 / self.total_games
+
+    @property
+    def win_rate_b(self):
+        return self.team_b_wins * 100 / self.total_games
+
     def __str__(self):
         return (
             f"Team A {self.team_a_wins}/{self.total_games} ({self.team_a_wins*100/self.total_games:0.1f}%) wins [{self.team_a_reward/self.total_games:0.1f} mean return]"

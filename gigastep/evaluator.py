@@ -141,7 +141,7 @@ class Evaluator:
             RandomPolicy(env),
             CirclePolicy(env),
             CirclePolicy(env, direction=-1),
-            CircleRandomPolicy(env),
+            # CircleRandomPolicy(env),
         ]
         self._ep_rewards = []
         self._ep_alives = []

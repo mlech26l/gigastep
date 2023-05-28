@@ -119,14 +119,14 @@ if __name__ == "__main__":
         device = torch.device("cuda:0")
         actor_critic.to(device)
 
-        # wining_rate_vec = loop_env_vectorized(
-        #     env=env,
-        #     policy=actor_critic,
-        #     device = "cuda:0"
-        # )
-        wining_rate = loop_env(
+        wining_rate_vec = loop_env_vectorized(
             env=env,
             policy=actor_critic,
-            device = "cuda:0",
-            headless = False
+            device = "cuda:0"
         )
+        # wining_rate = loop_env(
+        #     env=env,
+        #     policy=actor_critic,
+        #     device = "cuda:0",
+        #     headless = False
+        # )

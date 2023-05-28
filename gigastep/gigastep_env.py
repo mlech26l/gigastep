@@ -142,6 +142,7 @@ class GigastepEnv:
         self.reward_idle = reward_idle
         self.reward_agent_disabled = reward_agent_disabled
         self.reward_collision = reward_collision
+        self.reward_hit_waypoint = reward_hit_waypoint
 
         if per_agent_sprites is None:
             per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)

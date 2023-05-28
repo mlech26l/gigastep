@@ -101,11 +101,9 @@ class GigastepEnv:
         per_agent_max_health=None,
         per_agent_range=None,
         per_agent_team=None,
-        tagged_penalty=5,
-        team_reward=0,
         reward_game_won=1,
         reward_defeat_one_opponent=1,
-        reward_detection=1,
+        reward_detection=0,
         reward_damage=1,
         reward_idle=0,
         reward_agent_disabled=1,
@@ -128,13 +126,11 @@ class GigastepEnv:
         self.collision_range = jnp.square(collision_range)
         self.collision_altitude = collision_altitude
         self.collision_penalty = collision_penalty
-        self.tagged_penalty = tagged_penalty
         self.debug_reward = debug_reward
         self.use_stochastic_obs = use_stochastic_obs
         self.use_stochastic_comm = use_stochastic_comm
         self.max_communication_range = 10
         self.waypoint_size = waypoint_size
-        self.team_reward = team_reward
         self.enable_waypoints = enable_waypoints
         self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
         self.max_episode_length = max_episode_length

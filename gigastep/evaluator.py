@@ -1,11 +1,23 @@
 import jax
 import jax.numpy as jnp
+import torch
+import sys
+import time
+
+import numpy as np
+
+from gigastep import GigastepViewer 
 
 
 class EvaluatiorPolicy:
     def apply(self, obs, rng):
         raise NotImplementedError()
 
+class Trained_policy(EvaluatiorPolicy):
+    def __init__(self, env, policy):
+        pass
+    def apply(self, obs, rng):
+        raise NotImplementedError()
 
 class RandomPolicy(EvaluatiorPolicy):
     def __init__(self, env):
@@ -20,6 +32,7 @@ class RandomPolicy(EvaluatiorPolicy):
                 minval=0,
                 maxval=self.env.action_space.n,
             )
+
         else:
             action = jax.random.uniform(
                 rng,
@@ -41,6 +54,7 @@ class CirclePolicy(EvaluatiorPolicy):
             action = jnp.argmin(
                 jnp.linalg.norm(self.env.action_lut - action[None, :], axis=1)
             )
+
         self.action = action
         self.direction = direction
         self.v_apply = jax.vmap(self.apply, in_axes=(0, 0))
@@ -70,6 +84,7 @@ class Evaluator:
         self.team_a_wins = 0
         self.team_b_wins = 0
         self.total_games = 0
+        self.total_games_tie = 0
 
     @property
     def win_rate_a(self):
@@ -79,10 +94,15 @@ class Evaluator:
     def win_rate_b(self):
         return self.team_b_wins * 100 / self.total_games
 
+    @property
+    def tie_rate(self):
+        return (self.total_games - self.team_a_wins - self.team_b_wins) * 100 / self.total_games
+
     def __str__(self):
         return (
-            f"Team A {self.team_a_wins}/{self.total_games} ({self.team_a_wins*100/self.total_games:0.1f}%) wins [{self.team_a_reward/self.total_games:0.1f} mean return]"
+            f"Team A {self.team_a_wins}/{self.total_games-self.total_games_tie} ({self.team_a_wins*100/self.total_games:0.1f}%) wins [{self.team_a_reward/self.total_games:0.1f} mean return]"
             + f", Team B {self.team_b_wins}/{self.total_games} ({self.team_b_wins*100/self.total_games:0.1f}%) wins [{self.team_b_reward/self.total_games:0.1f} mean return]"
+            + f"  Tie {self.total_games_tie}/{self.total_games} ({self.total_games_tie*100/self.total_games:0.1f}%) ties"
         )
 
     def merge_actions(self, action1, action2):
@@ -105,6 +125,8 @@ class Evaluator:
 
         team_a_rewards = jnp.where(self.env.teams[None, :] == 0, alive_rewards, 0)
         team_b_rewards = jnp.where(self.env.teams[None, :] == 1, alive_rewards, 0)
+
+
         self.team_a_reward += team_a_rewards.sum()
         self.team_b_reward += team_b_rewards.sum()
 
@@ -127,6 +149,7 @@ class Evaluator:
         self.team_a_wins += team_a_wins.sum()
         self.team_b_wins += team_b_wins.sum()
         self.total_games += batch_size
+        self.total_games_tie = self.total_games - self.team_a_wins - self.team_b_wins
 
         self._ep_rewards = []
         self._ep_dones = []

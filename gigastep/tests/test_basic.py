@@ -19,6 +19,21 @@ def test_scenario20v20():
     state, obs, rewards, dones, ep_done = env.step(state, action, key_step)
 
 
+def test_scenario20v20_test_scenario20v20_debug_reward():
+    env = make_scenario("identical_20_vs_20", debug_reward=True)
+    rng = jax.random.PRNGKey(3)
+    rng, key_reset = jax.random.split(rng, 2)
+
+    ep_done = False
+    state, obs = env.reset(key_reset)
+    rng, key_action, key_step = jax.random.split(rng, 3)
+    action = jax.random.uniform(
+        key_action, shape=(env.n_agents, 3), minval=-1, maxval=1
+    )
+    state, obs, rewards, dones, ep_done = env.step(state, action, key_step)
+    state, obs, rewards, dones, ep_done = env.step(state, action, key_step)
+
+
 def test_state_obs_scenario20v20():
     env = make_scenario("identical_20_vs_20", obs_type="vector")
     rng = jax.random.PRNGKey(3)
@@ -77,6 +92,7 @@ def test_vmap_scenario20v20():
 
 
 if __name__ == "__main__":
+    test_scenario20v20_debug_reward()
     test_scenario20v20()
     test_state_obs_scenario20v20()
     test_vmap_scenario20v20()

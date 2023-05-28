@@ -63,6 +63,7 @@ def loop_env_vectorized(env):
             key, rng = jax.random.split(rng, 2)
             key = jax.random.split(key, batch_size)
             state, obs = env.v_reset(key)
+            t = 0
             while not jnp.all(ep_done):
                 rng, key, key2 = jax.random.split(rng, 3)
                 action_ego = jnp.zeros(
@@ -79,6 +80,8 @@ def loop_env_vectorized(env):
                 evaluator.update_step(r, dones, ep_done)
 
                 time.sleep(SLEEP_TIME)
+                t += 1
+                # print("t", t, "ep_done", ep_done)
             evaluator.update_episode()
             print(str(evaluator))
             # if frame_idx > 400:

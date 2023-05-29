@@ -117,6 +117,7 @@ class GigastepEnv:
         max_episode_length=500,
         jit=True,
         debug_reward=False,
+        precision=jnp.float32,
     ):
         self.n_agents = n_agents
         self.very_close_cone_depth = jnp.square(very_close_cone_depth)
@@ -147,6 +148,7 @@ class GigastepEnv:
         self.reward_agent_disabled = reward_agent_disabled
         self.reward_collision = reward_collision
         self.reward_hit_waypoint = reward_hit_waypoint
+        self.precision = precision
 
         if per_agent_sprites is None:
             per_agent_sprites = jnp.ones(n_agents, dtype=jnp.int32)
@@ -650,12 +652,12 @@ class GigastepEnv:
                 + (1 - alive[None, :]) * 2
                 + (teams[agent_id] != teams[None, :])
             )
-            rand = jax.random.uniform(rng, shape=distance.shape)
+            rand = jax.random.uniform(rng, shape=distance.shape, dtype=self.precision)
             communicate = distance <= rand
 
-            seen = (has_detected + jnp.eye(has_detected.shape[0])) * communicate
+            seen = (has_detected + jnp.eye(has_detected.shape[0], dtype=self.precision)) * communicate
         else:
-            seen = has_detected + jnp.eye(has_detected.shape[0]) * (
+            seen = has_detected + jnp.eye(has_detected.shape[0], dtype=self.precision) * (
                 teams[agent_id] == teams[None, :]
             ) * (alive[None, :] > 0)
         seen = jnp.sum(seen, axis=1) > 0
@@ -930,40 +932,47 @@ class GigastepEnv:
             shape=(self.n_agents,),
             minval=self._maps["start_pos_team_a"][map_idx][0],
             maxval=self._maps["start_pos_team_a"][map_idx][2],
+            dtype=self.precision,
         ) + (1 - self._per_agent_team) * jax.random.uniform(
             rng[0],
             shape=(self.n_agents,),
             minval=self._maps["start_pos_team_b"][map_idx][0],
             maxval=self._maps["start_pos_team_b"][map_idx][2],
+            dtype=self.precision,
         )
         y = self._per_agent_team * jax.random.uniform(
             rng[1],
             shape=(self.n_agents,),
             minval=self._maps["start_pos_team_a"][map_idx][1],
             maxval=self._maps["start_pos_team_a"][map_idx][3],
+            dtype=self.precision,
         ) + (1 - self._per_agent_team) * jax.random.uniform(
             rng[1],
             shape=(self.n_agents,),
             minval=self._maps["start_pos_team_b"][map_idx][1],
             maxval=self._maps["start_pos_team_b"][map_idx][3],
+            dtype=self.precision,
         )
         z = jax.random.uniform(
             rng[2],
             shape=(self.n_agents,),
             minval=self._maps["start_height"][map_idx][0],
             maxval=self._maps["start_height"][map_idx][1],
+            dtype=self.precision,
         )
-        v = jnp.ones(self.n_agents)
+        v = jnp.ones(self.n_agents, dtype=self.precision)
         heading = self._per_agent_team * jax.random.uniform(
             rng[4],
             shape=(self.n_agents,),
             minval=self._maps["start_heading_a"][map_idx][0],
             maxval=self._maps["start_heading_a"][map_idx][1],
+            dtype=self.precision,
         ) + (1 - self._per_agent_team) * jax.random.uniform(
             rng[4],
             shape=(self.n_agents,),
             minval=self._maps["start_heading_b"][map_idx][0],
             maxval=self._maps["start_heading_b"][map_idx][1],
+            dtype=self.precision,
         )
         # To avoid collisions in the reset step, we resample agents that are too close to each other or to boxes
         # up to 3 times
@@ -999,28 +1008,33 @@ class GigastepEnv:
                 shape=(self.n_agents,),
                 minval=self._maps["start_pos_team_a"][map_idx][0],
                 maxval=self._maps["start_pos_team_a"][map_idx][2],
+                dtype=self.precision,
             ) + (1 - self._per_agent_team) * jax.random.uniform(
                 rng[0],
                 shape=(self.n_agents,),
                 minval=self._maps["start_pos_team_b"][map_idx][0],
                 maxval=self._maps["start_pos_team_b"][map_idx][2],
+                dtype=self.precision,
             )
             y_new = self._per_agent_team * jax.random.uniform(
                 rng[1],
                 shape=(self.n_agents,),
                 minval=self._maps["start_pos_team_a"][map_idx][1],
                 maxval=self._maps["start_pos_team_a"][map_idx][3],
+                dtype=self.precision,
             ) + (1 - self._per_agent_team) * jax.random.uniform(
                 rng[1],
                 shape=(self.n_agents,),
                 minval=self._maps["start_pos_team_b"][map_idx][1],
                 maxval=self._maps["start_pos_team_b"][map_idx][3],
+                dtype=self.precision,
             )
             z_new = jax.random.uniform(
                 rng[2],
                 shape=(self.n_agents,),
                 minval=self._maps["start_height"][map_idx][0],
                 maxval=self._maps["start_height"][map_idx][1],
+                dtype=self.precision,
             )
             x = jnp.where(need_to_resample, x_new, x)
             y = jnp.where(need_to_resample, y_new, y)
@@ -1043,13 +1057,13 @@ class GigastepEnv:
             "sprite": self._per_agent_sprites,
         }
         if self.debug_reward:
-            agent_state["reward_game_won"] = jnp.zeros((self.n_agents,))
-            agent_state["reward_defeat_one_opponent"] = jnp.zeros((self.n_agents,))
-            agent_state["reward_detection"] = jnp.zeros((self.n_agents,))
-            agent_state["reward_damage"] = jnp.zeros((self.n_agents,))
-            agent_state["reward_idle"] = jnp.zeros((self.n_agents,))
-            agent_state["reward_agent_disabled"] = jnp.zeros((self.n_agents,))
-            agent_state["reward_collision"] = jnp.zeros((self.n_agents,))
+            agent_state["reward_game_won"] = jnp.zeros((self.n_agents,), dtype=self.precision)
+            agent_state["reward_defeat_one_opponent"] = jnp.zeros((self.n_agents,), dtype=self.precision)
+            agent_state["reward_detection"] = jnp.zeros((self.n_agents,), dtype=self.precision)
+            agent_state["reward_damage"] = jnp.zeros((self.n_agents,), dtype=self.precision)
+            agent_state["reward_idle"] = jnp.zeros((self.n_agents,), dtype=self.precision)
+            agent_state["reward_agent_disabled"] = jnp.zeros((self.n_agents,), dtype=self.precision)
+            agent_state["reward_collision"] = jnp.zeros((self.n_agents,), dtype=self.precision)
 
         state = (agent_state, map_state)
 
@@ -1059,8 +1073,8 @@ class GigastepEnv:
         rng = jax.random.split(rng[-1], x.shape[0])
         obs = v_get_observation(
             state,
-            jnp.zeros((self.n_agents, self.n_agents)),
-            jnp.zeros(self.n_agents),
+            jnp.zeros((self.n_agents, self.n_agents), dtype=self.precision),
+            jnp.zeros(self.n_agents, dtype=self.precision),
             rng,
             jnp.arange(x.shape[0]),
         )

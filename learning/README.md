@@ -41,3 +41,15 @@ $ pip install moviepy
 $ pip install setuptools==59.5.0
 ```
 This reads images from vmap scan. Consider doing single rollout if memory efficiency becomes an issue.
+
+### MAVA
+
+### Installation
+```
+$ sudo apt-get install swig
+$ cd Mava
+$ pip install -e . # don't do pip install id-mava[reverb,jax,envs] since that is out-of-date
+$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/anaconda3/envs/gigastep/lib # you need this for every runs; perhaps put it in bashrc
+
+$ pip install --upgrade dm-haiku # to fix "AttributeError: 'Config' object has no attribute 'jax_experimental_name_stack'"
+```

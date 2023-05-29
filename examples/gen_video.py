@@ -45,6 +45,31 @@ def loop_2agents():
         frame += 1
 
 
+def loop_some_agents():
+    viewer = GigastepViewer(4 * 84)
+    dyn = GigastepEnv()
+    rng = jax.random.PRNGKey(1)
+    os.makedirs("video/some_agents", exist_ok=True)
+    s1 = GigastepEnv.get_initial_state(y=5, x=1, team=0)
+    s2 = GigastepEnv.get_initial_state(y=5, x=2, team=1)
+    s3 = GigastepEnv.get_initial_state(y=4, x=2, team=1)
+    s6 = GigastepEnv.get_initial_state(y=3, x=2, team=1)
+    s4 = GigastepEnv.get_initial_state(y=4.5, x=2, team=1)
+    s5 = GigastepEnv.get_initial_state(y=3.5, x=2, team=1)
+    state = stack_agents(s1, s2, s3, s4, s5, s6)
+    frame = 0
+    while jnp.sum(dyn.get_dones(state)) > 0:
+        action = jnp.zeros((6, 3))
+        rng, key = jax.random.split(rng, 2)
+        state, obs, r, a, d = dyn.step(state, action, key)
+        viewer.draw(dyn, state, obs)
+        save_frame(
+            dyn, state, obs, f"video/some_agents/frame_{frame:04d}.png", obs2=True
+        )
+        print("tracked", state[0]["tracked"])
+        frame += 1
+
+
 def save_frame(
     dyn, state, step_obs, filename, frame_size=4 * 84, obs1=True, obs2=False
 ):
@@ -251,13 +276,14 @@ def loop_heterogenous():
 
 
 if __name__ == "__main__":
-    loop_2agents_altitude()
-    loop_2agents()
-    loop_visible_debug()
-    loop_random_agents()
-    loop_random_many_agents()
-    loop_maps()
-    loop_heterogenous()
+    loop_some_agents()
+    # loop_2agents_altitude()
+    # loop_2agents()
+    # loop_visible_debug()
+    # loop_random_agents()
+    # loop_random_many_agents()
+    # loop_maps()
+    # loop_heterogenous()
     # convert -delay 10 -loop 0 video/random/frame_*.png video/random.gif
     # convert -delay 10 -loop 0 video/2agents/frame_*.png video/2agents.gif
     # convert -delay 10 -loop 0 video/visibility/frame_*.png video/visibility.gif

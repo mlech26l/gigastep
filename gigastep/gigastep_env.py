@@ -11,8 +11,21 @@ from gigastep.jax_utils import Discrete, Box
 
 def stack_agents(*args):
     """Stack agents along the first axis."""
-    agents = jax.tree_map(lambda *xs: jnp.stack(xs, axis=0), *args)
-    map_state = {"map_idx": jnp.int32(0)}
+    num_agents = len(args)
+    agents = []
+    for agent in args:
+        agent = dict(agent)
+        agent["tracked"] = jnp.zeros((num_agents,), dtype=jnp.float32)
+        agents.append(agent)
+    agents = jax.tree_map(lambda *xs: jnp.stack(xs, axis=0), *agents)
+
+    map_state = {
+        "map_idx": jnp.int32(0),
+        "waypoint_location": jnp.zeros(4),
+        "waypoint_enabled": jnp.float32(0),
+        "aux_rewards_factor": jnp.float32(1),
+        "episode_length": jnp.int32(0),
+    }
     return (agents, map_state)
 
 
@@ -81,7 +94,9 @@ class GigastepEnv:
         cone_angle=jnp.pi * 0.8,
         damage_cone_depth=3.5,
         damage_cone_angle=jnp.pi / 4,
-        damage_per_second=0.5,
+        damage_per_second=0.2,
+        min_tracking_time=3,
+        max_tracking_time=10,
         healing_per_second=0.1,
         use_stochastic_obs=True,
         use_stochastic_comm=True,
@@ -95,7 +110,7 @@ class GigastepEnv:
         resolution_x=84,
         resolution_y=84,
         n_agents=10,
-        maps="all",
+        maps="empty",
         per_agent_sprites=None,
         per_agent_thrust=None,
         per_agent_max_health=None,
@@ -121,6 +136,8 @@ class GigastepEnv:
         self.very_close_cone_depth = jnp.square(very_close_cone_depth)
         self.cone_depth = jnp.square(cone_depth)
         self.cone_angle = cone_angle
+        self.min_tracking_time = min_tracking_time
+        self.max_tracking_time = max_tracking_time
         self.damage_cone_depth = damage_cone_depth
         self.damage_cone_angle = damage_cone_angle
         self.damage_per_second = damage_per_second
@@ -315,6 +332,7 @@ class GigastepEnv:
         agent_states, map_state = states
         agent_states = v_step(agent_states, actions)
 
+        num_agents = agent_states["x"].shape[0]
         # Check if agents are out of bounds
         # x, y, z, v, heading, health, seen, alive, teams = next_states.T
         x = agent_states["x"]
@@ -435,6 +453,10 @@ class GigastepEnv:
             rng, key = jax.random.split(rng)
             rand = jax.random.uniform(key, shape=in_cone_score.shape)
             stochastic_detected = in_cone_score < rand
+            # In damage cone, we always detect
+            stochastic_detected = stochastic_detected | (
+                closness_score <= 1 & in_damage_cone
+            )
         else:
             stochastic_detected = closness_score <= 1 & in_cone
         shoot_target = closeness_score_damage <= 1 & in_damage_cone
@@ -447,15 +469,18 @@ class GigastepEnv:
         )
         # Probabilistic detection
         has_detected = can_detect & ((very_close == 1) | stochastic_detected)
-        has_shooted = can_detect & shoot_target & has_detected
+        deal_damage = can_detect & shoot_target & has_detected
 
-        deal_damage = has_shooted.astype(jnp.float32)
+        deal_damage = deal_damage.astype(jnp.float32)
         tracked = tracked + deal_damage
-        tracked = tracked * (1 - deal_damage)
+        tracked = tracked * deal_damage  # reset to 0 if not detected
 
         # Damage is proportional to the number of times an agent has been tracked
         # Damage starts at 3 and increases by 1 for each time an agent is tracked up to 10
-        deal_damage = jnp.clip(tracked, 3, 10) - 3
+        deal_damage = (
+            jnp.clip(tracked, self.min_tracking_time, self.max_tracking_time)
+            - self.min_tracking_time
+        )
         takes_damage = jnp.sum(deal_damage, axis=1)
 
         # Check if agents are in the cone of vision of another agent
@@ -499,19 +524,19 @@ class GigastepEnv:
             )
 
         reward_info = {
-            "reward_game_won": jnp.zeros((self.n_agents,)),
-            "reward_defeat_one_opponent": jnp.zeros((self.n_agents,)),
-            "reward_detection": jnp.zeros((self.n_agents,)),
-            "reward_damage": jnp.zeros((self.n_agents,)),
-            "reward_idle": jnp.zeros((self.n_agents,)),
-            "reward_agent_disabled": jnp.zeros((self.n_agents,)),
-            "reward_collision": jnp.zeros((self.n_agents,)),
+            "reward_game_won": jnp.zeros((num_agents,)),
+            "reward_defeat_one_opponent": jnp.zeros((num_agents,)),
+            "reward_detection": jnp.zeros((num_agents,)),
+            "reward_damage": jnp.zeros((num_agents,)),
+            "reward_idle": jnp.zeros((num_agents,)),
+            "reward_agent_disabled": jnp.zeros((num_agents,)),
+            "reward_collision": jnp.zeros((num_agents,)),
         }
         ### REWARDS ###
         if self.reward_hit_waypoint > 0:
             reward = self.reward_hit_waypoint * hit_waypoint
         else:
-            reward = jnp.zeros(self.n_agents)
+            reward = jnp.zeros(num_agents)
 
         if self.reward_defeat_one_opponent > 0:
             reward_defeat_one_opponent = (
@@ -598,7 +623,7 @@ class GigastepEnv:
         reward_info["reward_game_won"] = self.reward_game_won * game_won_reward
 
         # normalize reward to number of agents. Make the reward in a similar level for different number of agents
-        reward = reward / self.n_agents
+        reward = reward / num_agents
         reward = reward * alive_pre  # if agent was already dead, reward is zero
 
         agent_states = {
@@ -624,9 +649,9 @@ class GigastepEnv:
         v_get_observation = jax.vmap(
             self.get_observation, in_axes=(None, None, None, 0, 0)
         )
-        rng = jax.random.split(rng, x.shape[0])
+        rng = jax.random.split(rng, num_agents)
         obs = v_get_observation(
-            next_states, has_detected, seen, rng, jnp.arange(x.shape[0])
+            next_states, has_detected, seen, rng, jnp.arange(num_agents)
         )
 
         dones = (1 - alive).astype(jnp.bool_)
@@ -638,6 +663,7 @@ class GigastepEnv:
     # @partial(jax.jit, static_argnums=(0,))
     def get_observation(self, states, has_detected, took_damage, rng, agent_id):
         agent_states, map_state = states
+        num_agents = agent_states["x"].shape[0]
         x = agent_states["x"]
         y = agent_states["y"]
         z = agent_states["z"]
@@ -661,11 +687,13 @@ class GigastepEnv:
             rand = jax.random.uniform(rng, shape=distance.shape, dtype=self.precision)
             communicate = distance <= rand
 
-            seen = (has_detected + jnp.eye(has_detected.shape[0], dtype=self.precision)) * communicate
+            seen = (
+                has_detected + jnp.eye(has_detected.shape[0], dtype=self.precision)
+            ) * communicate
         else:
-            seen = has_detected + jnp.eye(has_detected.shape[0], dtype=self.precision) * (
-                teams[agent_id] == teams[None, :]
-            ) * (alive[None, :] > 0)
+            seen = has_detected + jnp.eye(
+                has_detected.shape[0], dtype=self.precision
+            ) * (teams[agent_id] == teams[None, :]) * (alive[None, :] > 0)
         seen = jnp.sum(seen, axis=1) > 0
 
         rgb_obs, vector_obs = None, None
@@ -779,7 +807,7 @@ class GigastepEnv:
                 seen, distance, jnp.square(self.limits[0] + self.limits[1]) + 1
             )
             # For some reason we need to manually set the ego agent to location 0
-            ranking = jnp.where(jnp.arange(self.n_agents) == agent_id, -1, ranking)
+            ranking = jnp.where(jnp.arange(num_agents) == agent_id, -1, ranking)
 
             sorted_indices = jnp.argsort(ranking).flatten()
             relative_team = (
@@ -1065,13 +1093,27 @@ class GigastepEnv:
             "tracked": tracked,
         }
         if self.debug_reward:
-            agent_state["reward_game_won"] = jnp.zeros((self.n_agents,), dtype=self.precision)
-            agent_state["reward_defeat_one_opponent"] = jnp.zeros((self.n_agents,), dtype=self.precision)
-            agent_state["reward_detection"] = jnp.zeros((self.n_agents,), dtype=self.precision)
-            agent_state["reward_damage"] = jnp.zeros((self.n_agents,), dtype=self.precision)
-            agent_state["reward_idle"] = jnp.zeros((self.n_agents,), dtype=self.precision)
-            agent_state["reward_agent_disabled"] = jnp.zeros((self.n_agents,), dtype=self.precision)
-            agent_state["reward_collision"] = jnp.zeros((self.n_agents,), dtype=self.precision)
+            agent_state["reward_game_won"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
+            agent_state["reward_defeat_one_opponent"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
+            agent_state["reward_detection"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
+            agent_state["reward_damage"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
+            agent_state["reward_idle"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
+            agent_state["reward_agent_disabled"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
+            agent_state["reward_collision"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
 
         state = (agent_state, map_state)
 

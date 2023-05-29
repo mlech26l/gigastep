@@ -4,7 +4,7 @@ import time
 
 import cv2
 import jax
-
+import jax.numpy as jnp
 from gigastep import GigastepViewer, GigastepEnv, make_scenario, ScenarioBuilder
 
 SLEEP_TIME = 0.01
@@ -24,9 +24,10 @@ def loop_env(env):
         # while not ep_done and t < 50:
         while True:
             rng, key = jax.random.split(rng, 2)
-            action = jax.random.uniform(
-                key, shape=(env.n_agents, 3), minval=-1, maxval=1
-            )
+            # action = jax.random.uniform(
+            #     key, shape=(env.n_agents, 3), minval=-1, maxval=1
+            # )
+            action = jnp.zeros((env.n_agents, 3))
             rng, key = jax.random.split(rng, 2)
             state, obs, r, a, d = env.step(state, action, key)
             img = viewer.draw(env, state, obs)

@@ -81,8 +81,8 @@ class GigastepEnv:
         cone_angle=jnp.pi * 0.8,
         damage_cone_depth=3.5,
         damage_cone_angle=jnp.pi / 4,
-        damage_per_second=3,
-        healing_per_second=0.3,
+        damage_per_second=0.5,
+        healing_per_second=0.1,
         use_stochastic_obs=True,
         use_stochastic_comm=True,
         enable_waypoints=False,
@@ -101,8 +101,6 @@ class GigastepEnv:
         per_agent_max_health=None,
         per_agent_range=None,
         per_agent_team=None,
-        tagged_penalty=5,
-        team_reward=0,
         reward_game_won=10,
         reward_defeat_one_opponent=100,
         reward_detection=0,
@@ -130,13 +128,11 @@ class GigastepEnv:
         self.collision_range = jnp.square(collision_range)
         self.collision_altitude = collision_altitude
         self.collision_penalty = collision_penalty
-        self.tagged_penalty = tagged_penalty
         self.debug_reward = debug_reward
         self.use_stochastic_obs = use_stochastic_obs
         self.use_stochastic_comm = use_stochastic_comm
         self.max_communication_range = 10
         self.waypoint_size = waypoint_size
-        self.team_reward = team_reward
         self.enable_waypoints = enable_waypoints
         self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
         self.max_episode_length = max_episode_length
@@ -308,6 +304,7 @@ class GigastepEnv:
             "max_health": state["max_health"],
             "max_thrust": state["max_thrust"],
             "sprite": state["sprite"],
+            "tracked": state["tracked"],
         }
         return next_state
 
@@ -325,6 +322,7 @@ class GigastepEnv:
         z = agent_states["z"]
         alive = agent_states["alive"]
         teams = agent_states["team"]
+        tracked = agent_states["tracked"]
 
         # Previous alive agents
         alive_pre = agent_states["alive"]
@@ -451,12 +449,21 @@ class GigastepEnv:
         has_detected = can_detect & ((very_close == 1) | stochastic_detected)
         has_shooted = can_detect & shoot_target & has_detected
 
+        deal_damage = has_shooted.astype(jnp.float32)
+        tracked = tracked + deal_damage
+        tracked = tracked * (1 - deal_damage)
+
+        # Damage is proportional to the number of times an agent has been tracked
+        # Damage starts at 3 and increases by 1 for each time an agent is tracked up to 10
+        deal_damage = jnp.clip(tracked, 3, 10) - 3
+        takes_damage = jnp.sum(deal_damage, axis=1)
+
         # Check if agents are in the cone of vision of another agent
         has_detected = has_detected.astype(jnp.float32)
-        deal_damage = has_shooted * in_damage_cone
+        # deal_damage = has_shooted * in_damage_cone
 
         seen = jnp.sum(has_detected, axis=1)  # can be greater than 1
-        takes_damage = jnp.sum(deal_damage, axis=1)  # can be greater than 1
+        # takes_damage = jnp.sum(deal_damage, axis=1)  # can be greater than 1
         health = (
             agent_states["health"]
             - takes_damage * self.damage_per_second * self.time_delta
@@ -491,7 +498,6 @@ class GigastepEnv:
                 map_state["episode_length"] >= self.max_episode_length
             )
 
-        reward = jnp.zeros(self.n_agents)
         reward_info = {
             "reward_game_won": jnp.zeros((self.n_agents,)),
             "reward_defeat_one_opponent": jnp.zeros((self.n_agents,)),
@@ -501,12 +507,11 @@ class GigastepEnv:
             "reward_agent_disabled": jnp.zeros((self.n_agents,)),
             "reward_collision": jnp.zeros((self.n_agents,)),
         }
-
         ### REWARDS ###
-        if self.reward_hit_waypoint>0:
+        if self.reward_hit_waypoint > 0:
             reward = self.reward_hit_waypoint * hit_waypoint
         else:
-            reward = jnp.zeros_like(hit_waypoint)
+            reward = jnp.zeros(self.n_agents)
 
         if self.reward_defeat_one_opponent > 0:
             reward_defeat_one_opponent = (
@@ -609,6 +614,7 @@ class GigastepEnv:
             "max_health": agent_states["max_health"],
             "detection_range": agent_states["detection_range"],
             "sprite": agent_states["sprite"],
+            "tracked": tracked,
         }
         if self.debug_reward:
             for k, v in reward_info.items():
@@ -1042,6 +1048,7 @@ class GigastepEnv:
 
         health = jnp.ones((self.n_agents,), dtype=jnp.float32)
         alive = jnp.ones((self.n_agents,), dtype=jnp.float32)
+        tracked = jnp.zeros((self.n_agents, self.n_agents), dtype=jnp.float32)
         agent_state = {
             "x": x,
             "y": y,
@@ -1055,6 +1062,7 @@ class GigastepEnv:
             "max_health": self._per_agent_max_health,
             "max_thrust": self._per_agent_thrust,
             "sprite": self._per_agent_sprites,
+            "tracked": tracked,
         }
         if self.debug_reward:
             agent_state["reward_game_won"] = jnp.zeros((self.n_agents,), dtype=self.precision)

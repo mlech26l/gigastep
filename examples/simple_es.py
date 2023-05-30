@@ -62,7 +62,7 @@ def run_n_steps2(params, env):
 
     batch_size = 128
     n_steps = 200
-    opponent = evaluator.policies[-1]
+    # opponent = evaluator.policies[-1]
 
     rng = jax.random.PRNGKey(2)
     rng, key = jax.random.split(rng, 2)
@@ -81,7 +81,8 @@ def run_n_steps2(params, env):
 
         key2 = jax.random.split(key2, batch_size)
         # action_ego = evaluator.policies[-1].v_apply(obs, key2)
-        action_opp = evaluator.policies[0].v_apply(obs, key2)
+        # action_opp = evaluator.policies[0].v_apply(obs, key2)
+        action_opp = evaluator.policies[-2].v_apply(obs, key2)
         # action_opp = opponent.v_apply(obs, key2)
         # action_opp = jnp.zeros_like(action_ego)
 

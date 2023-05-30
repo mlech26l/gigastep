@@ -4,14 +4,10 @@ from tqdm import tqdm
 from copy import deepcopy
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
-import numpy as np
 import matplotlib.pyplot as plt
 import optax
-from flax.linen.initializers import constant, orthogonal
-from typing import Sequence, NamedTuple, Any
+from typing import NamedTuple, Any
 from flax.training.train_state import TrainState
-import distrax
 from gigastep import make_scenario
 
 import chex
@@ -22,44 +18,7 @@ from gymnax.wrappers.purerl import GymnaxWrapper
 from typing import Optional, Tuple, Union
 
 from utils import generate_gif
-
-
-class ActorCritic(nn.Module):
-    action_dim: Sequence[int]
-    activation: str = "tanh"
-
-    @nn.compact
-    def __call__(self, x):
-        if self.activation == "relu":
-            activation = nn.relu
-        else:
-            activation = nn.tanh
-        actor_mean = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-        )(x)
-        actor_mean = activation(actor_mean)
-        actor_mean = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-        )(actor_mean)
-        actor_mean = activation(actor_mean)
-        actor_mean = nn.Dense(
-            self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
-        )(actor_mean)
-        pi = distrax.Categorical(logits=actor_mean)
-
-        critic = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-        )(x)
-        critic = activation(critic)
-        critic = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-        )(critic)
-        critic = activation(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
-            critic
-        )
-
-        return pi, jnp.squeeze(critic, axis=-1)
+from network import ActorCriticMLP, ActorCriticLSTM
 
 
 class GigaStepWrapper(GymnaxWrapper):
@@ -118,6 +77,44 @@ class GigaStepTupleObsWrapper(GigaStepWrapper):
             jax.lax.select(episode_done, obs_re[1], obs_st[1]),
         )
 
+        return obs, state, reward, done, {} # replace last argument with empty info
+
+
+# TODO: seems inefficient
+class FrameStackWrapper(GymnaxWrapper):
+    def __init__(self, env: environment.Environment, n_frames: int):
+        super().__init__(env)
+        self.n_frames = n_frames
+
+    def _get_stacked_obs(self, obs, state):
+        state[0]["stacked_obs"][self.pointer] = obs
+        self.pointer = (self.pointer + 1) % self.n_frames
+        return jnp.concatenate(state[0]["stacked_obs"], axis=-1)
+
+    @partial(jax.jit, static_argnums=(0,))
+    def reset(
+        self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None
+    ) -> Tuple[chex.Array, environment.EnvState]:
+        obs, state = self._env.reset(key)
+        self.pointer = 0
+        state[0]["stacked_obs"] = [obs] * self.n_frames
+        obs = self._get_stacked_obs(obs, state)
+        return obs, state
+    
+    @partial(jax.jit, static_argnums=(0,))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: environment.EnvState,
+        action: Union[int, float],
+        params: Optional[environment.EnvParams] = None,
+    ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
+        stacked_obs = state[0]["stacked_obs"]
+        obs, state, reward, done, _ = self._env.step(
+            key, state, action,
+        )
+        state[0]["stacked_obs"] = stacked_obs
+        obs = self._get_stacked_obs(obs, state)
         return obs, state, reward, done, {} # replace last argument with empty info
 
 
@@ -197,22 +194,33 @@ def make_train(config):
     )
     unwrapped_env = make_scenario(config["ENV_NAME"], **config["ENV_CONFIG"])
     env = GigaStepWrapper(unwrapped_env)
+    if config["FRAME_STACK_N"] > 1:
+        env = FrameStackWrapper(env, config["FRAME_STACK_N"])
     env = LogMultiAgentWrapper(env)
-    
-    make_network = partial(ActorCritic, unwrapped_env.action_space.n, activation=config["ACTIVATION"])
+
+    if config["NETWORK_TYPE"] == "mlp":
+        make_network = partial(ActorCriticMLP, unwrapped_env.action_space.n, activation=config["ACTIVATION"])
+    elif config["NETWORK_TYPE"] == "lstm":
+        # make_network = partial(ActorCriticLSTM, 128, unwrapped_env.action_space.n)
+        raise NotImplementedError
+    else:
+        raise ValueError("Unrecognized network type " + config["NETWORK_TYPE"])
 
     def linear_schedule(count):
         frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
         return config["LR"] * frac
 
-    def train(rng, train_state=None, env_state=None, obsv=None):
+    def train(rng, train_state=None, env_state=None, obsv=None, net_state=None):
 
         network = make_network()
 
         if train_state is None:
             # INIT NETWORK
             rng, _rng = jax.random.split(rng)
-            init_x = jnp.zeros(unwrapped_env.observation_space.shape)
+            if config["FRAME_STACK_N"] > 1:
+                init_x = jnp.zeros(unwrapped_env.observation_space.shape[:-1] + (unwrapped_env.observation_space.shape[-1] * config["FRAME_STACK_N"],))
+            else:
+                init_x = jnp.zeros(unwrapped_env.observation_space.shape)
             network_params = network.init(_rng, init_x)
             if config["ANNEAL_LR"]:
                 tx = optax.chain(
@@ -227,6 +235,12 @@ def make_train(config):
                 tx=tx,
             )
 
+            if config["NETWORK_TYPE"] == "lstm":
+                # TODO: tbu
+                net_state = network.initial_state(None)
+            else:
+                net_state = jnp.zeros((config["NUM_ENVS"],))
+
             # INIT ENV
             rng, _rng = jax.random.split(rng)
             reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
@@ -237,11 +251,14 @@ def make_train(config):
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
             def _env_step(runner_state, unused):
-                train_state, env_state, last_obs, rng = runner_state
+                train_state, env_state, last_obs, net_state, rng = runner_state
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
-                pi, value = network.apply(train_state.params, last_obs)
+                if config["NETWORK_TYPE"] == "lstm":
+                    pi, value = network.apply(train_state.params, last_obs) # DEBUG
+                else: # mlp
+                    pi, value = network.apply(train_state.params, last_obs)
                 action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(action)
 
@@ -252,10 +269,12 @@ def make_train(config):
                 obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0,0,0,None))(
                     rng_step, env_state, action, None
                 )
+                if config["NETWORK_TYPE"] == "lstm":
+                    import ipdb; ipdb.set_trace() # TODO: reset rnn state
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info
                 )
-                runner_state = (train_state, env_state, obsv, rng)
+                runner_state = (train_state, env_state, obsv, net_state, rng)
                 return runner_state, transition
 
             runner_state, traj_batch = jax.lax.scan(
@@ -263,7 +282,7 @@ def make_train(config):
             )
 
             # CALCULATE ADVANTAGE
-            train_state, env_state, last_obs, rng = runner_state
+            train_state, env_state, last_obs, net_state, rng = runner_state
             _, last_val = network.apply(train_state.params, last_obs)
 
             def _calculate_gae(traj_batch, last_val):
@@ -376,11 +395,11 @@ def make_train(config):
             metric = traj_batch.info
             rng = update_state[-1]
 
-            runner_state = (train_state, env_state, last_obs, rng)
+            runner_state = (train_state, env_state, last_obs, net_state, rng)
             return runner_state, metric
 
         rng, _rng = jax.random.split(rng)
-        runner_state = (train_state, env_state, obsv, _rng)
+        runner_state = (train_state, env_state, obsv, net_state, _rng)
         runner_state, metric  = jax.lax.scan(
             _update_step, runner_state, None, config["NUM_UPDATES"]
         )
@@ -413,10 +432,12 @@ if __name__ == "__main__":
             "use_stochastic_comm": False,
             "max_agent_in_vec_obs": 100,
         },
-        "LR": 2.5e-4,
+        "NETWORK_TYPE": ["mlp", "lstm"][0],
+        "FRAME_STACK_N": 4,
+        "LR": 4e-4,
         "NUM_ENVS": 64,
         "NUM_STEPS": 256,
-        "TOTAL_TIMESTEPS": 1e5,
+        "TOTAL_TIMESTEPS": 1e5, # for one train_jit only
         "UPDATE_EPOCHS": 4,
         "NUM_MINIBATCHES": 4,
         "GAMMA": 0.99,
@@ -424,9 +445,9 @@ if __name__ == "__main__":
         "CLIP_EPS": 0.2,
         "ENT_COEF": 0.01,
         "VF_COEF": 0.5,
-        "MAX_GRAD_NORM": 0.5,
+        "MAX_GRAD_NORM": 0.1, # 0.5,
         "ACTIVATION": "tanh",
-        "ENV_NAME": ["identical_5_vs_5", "identical_20_vs_20"][1],
+        "ENV_NAME": ["identical_5_vs_5", "identical_20_vs_20"][0],
         "ANNEAL_LR": True,
     }
     rng = jax.random.PRNGKey(30)
@@ -435,19 +456,11 @@ if __name__ == "__main__":
 
     if EVAL_EVERY > 0:
         network = make_network()
-        def action_fn(obs, rng):
+        def action_fn_base(network_params, obs, rng):
             rng, _rng = jax.random.split(rng)
-            pi, value = network.apply(out["runner_state"][0].params, obs)
+            pi, value = network.apply(network_params, obs)
             action = pi.sample(seed=_rng)
             return action
-
-        # HACK: to handle interdependency of agent observation and visualizer
-        env_config_eval = deepcopy(config["ENV_CONFIG"])
-        env_config_eval["obs_type"] = "rgb_vector"
-        unwrapped_env = make_scenario(config["ENV_NAME"], **env_config_eval)
-        env = GigaStepTupleObsWrapper(unwrapped_env)
-        env = LogMultiAgentWrapper(env)
-        env_tuple = (env, unwrapped_env)
 
     ep_ret_list = []
     pbar = tqdm(range(0, int(ALL_TOTAL_TIMESTEPS), int(config["TOTAL_TIMESTEPS"])))
@@ -458,8 +471,8 @@ if __name__ == "__main__":
             if i == 0:
                 out = train_jit(rng)
             else:
-                train_state, env_state, obsv, _ = out["runner_state"]
-                out = train_jit(rng, train_state, env_state, obsv)
+                train_state, env_state, obsv, net_state, rng = out["runner_state"]
+                out = train_jit(rng, train_state, env_state, obsv, net_state)
             toc = time.time()
 
             ep_ret_i = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1).tolist()
@@ -468,7 +481,8 @@ if __name__ == "__main__":
             pbar.set_description(f"[{i}/{ALL_TOTAL_TIMESTEPS}] {toc-tic}")
 
             current_ts = i + int(config["TOTAL_TIMESTEPS"])
-            if (EVAL_EVERY > 0) and (current_ts % EVAL_EVERY == 0):
+            if (EVAL_EVERY > 0) and ((i == 0) or (current_ts % EVAL_EVERY == 0)):
+                action_fn = partial(action_fn_base, out["runner_state"][0].params)
                 filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}.gif")
                 generate_gif(env_tuple, action_fn, filepath)
         except KeyboardInterrupt:

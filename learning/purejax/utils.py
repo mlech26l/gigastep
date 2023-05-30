@@ -46,24 +46,23 @@ def generate_gif(env_tuple, action_fn, filepath, seed=42,
                  max_frame_num=500, viewer_title="Evaluation"):
     rng = jax.random.PRNGKey(seed)
     env, unwrapped_env = env_tuple
-    assert unwrapped_env._obs_type == "rgb_vector", "Hacky solution to make visualizer work with vector obs"
 
-    viewer = GigastepViewer(84 * 4)
+    viewer = GigastepViewer(84 * 4, show_num_agents=0)
     viewer.set_title(viewer_title)
 
     key, rng = jax.random.split(rng, 2)
     frame_num = 0
     frame_list = []
-    (rgb_obs, obs), state = env.reset(key)
+    obs, state = env.reset(key)
     ep_done = False
     while not ep_done and frame_num < max_frame_num:
         rng, key = jax.random.split(rng, 2)
         action = action_fn(obs, key)
         rng, key = jax.random.split(rng, 2)
-        (rgb_obs, obs), state, r, done, info = env.step(key, state, action)
+        obs, state, r, done, info = env.step(key, state, action)
         ep_done = get_ep_done(unwrapped_env, done)
-        viewer.draw(unwrapped_env, state.env_state, rgb_obs)
-        frame = to_frame(unwrapped_env, state.env_state, rgb_obs, obs1=True)
+        rgb_obs = env.get_global_observation(state.env_state)
+        frame = viewer.draw(unwrapped_env, state.env_state, rgb_obs)
         frame_list.append(frame)
         frame_num += 1
 

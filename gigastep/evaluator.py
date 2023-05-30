@@ -381,15 +381,8 @@ def loop_env_vectorized(env, policy=None, device="cpu", switch_side = False):
             # if frame_idx > 400:
             #     sys.exit(1)
 
-<<<<<<< HEAD
     return [evaluator.team_a_wins / evaluator.total_games,
             evaluator.team_b_wins / evaluator.total_games,
             evaluator.total_games_tie / evaluator.total_games]
 
 
-=======
-    return [
-        evaluator.team_a_wins / evaluator.total_games,
-        evaluator.team_b_wins / evaluator.total_games,
-    ]
->>>>>>> eccbb3586974cd2936c7f5a09e444061ede70888

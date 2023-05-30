@@ -1,5 +1,7 @@
+import os
 import time
 from tqdm import tqdm
+from copy import deepcopy
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
@@ -18,6 +20,8 @@ from functools import partial
 from gymnax.environments import environment
 from gymnax.wrappers.purerl import GymnaxWrapper
 from typing import Optional, Tuple, Union
+
+from utils import generate_gif
 
 
 class ActorCritic(nn.Module):
@@ -91,13 +95,39 @@ class GigaStepWrapper(GymnaxWrapper):
         return obs, state, reward, done, {} # replace last argument with empty info
 
 
+# HACK
+class GigaStepTupleObsWrapper(GigaStepWrapper):
+    @partial(jax.jit, static_argnums=(0,))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: environment.EnvState,
+        action: Union[int, float],
+        params: Optional[environment.EnvParams] = None,
+    ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
+        key, key_reset = jax.random.split(key)
+        state_st, obs_st, reward, done, episode_done = self._env.step(
+            state, action, key
+        )
+        obs_re, state_re = self.reset(key_reset, params)
+        state = jax.tree_map(
+            lambda x, y: jax.lax.select(episode_done, x, y), state_re, state_st
+        )
+        obs = (
+            jax.lax.select(episode_done, obs_re[0], obs_st[0]),
+            jax.lax.select(episode_done, obs_re[1], obs_st[1]),
+        )
+
+        return obs, state, reward, done, {} # replace last argument with empty info
+
+
 @struct.dataclass
 class LogMultiAgentEnvState:
     env_state: environment.EnvState
-    episode_returns: jnp.ndarray # float
-    episode_lengths: jnp.ndarray # int
-    returned_episode_returns: jnp.ndarray # float
-    returned_episode_lengths: jnp.ndarray # int
+    episode_returns: jnp.ndarray
+    episode_lengths: jnp.ndarray
+    returned_episode_returns: jnp.ndarray
+    returned_episode_lengths: jnp.ndarray
 
 
 class LogMultiAgentWrapper(GymnaxWrapper):
@@ -165,9 +195,11 @@ def make_train(config):
     config["MINIBATCH_SIZE"] = (
         config["NUM_ENVS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
     )
-    unwrapped_env = make_scenario(config["ENV_NAME"], obs_type="vector", discrete_actions=True)
+    unwrapped_env = make_scenario(config["ENV_NAME"], **config["ENV_CONFIG"])
     env = GigaStepWrapper(unwrapped_env)
     env = LogMultiAgentWrapper(env)
+    
+    make_network = partial(ActorCritic, unwrapped_env.action_space.n, activation=config["ACTIVATION"])
 
     def linear_schedule(count):
         frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
@@ -175,7 +207,7 @@ def make_train(config):
 
     def train(rng, train_state=None, env_state=None, obsv=None):
 
-        network = ActorCritic(unwrapped_env.action_space.n, activation=config["ACTIVATION"])
+        network = make_network()
 
         if train_state is None:
             # INIT NETWORK
@@ -354,14 +386,35 @@ def make_train(config):
         )
         return {"runner_state": runner_state, "metrics": metric}
 
-    return train
+    return train, (env, unwrapped_env), make_network
 
 
 if __name__ == "__main__":
+    BASE_DIR = "./logdir/"
     ALL_TOTAL_TIMESTEPS = 1e7
+    EVAL_EVERY = 2e6
+    resolution = 84
     config = {
+        "ENV_CONFIG": {
+            "resolution_x": resolution,
+            "resolution_y": resolution,
+            "obs_type": "vector",
+            "discrete_actions": True,
+            "reward_game_won": 100,
+            "reward_defeat_one_opponent": 100,
+            "reward_detection": 0,
+            "reward_damage": 0,
+            "reward_idle": 0,
+            "reward_collision": 0,
+            "cone_depth": 15.0,
+            "cone_angle": jnp.pi * 1.99,
+            "enable_waypoints": False,
+            "use_stochastic_obs": False,
+            "use_stochastic_comm": False,
+            "max_agent_in_vec_obs": 100,
+        },
         "LR": 2.5e-4,
-        "NUM_ENVS": 64, # 4,
+        "NUM_ENVS": 64,
         "NUM_STEPS": 256,
         "TOTAL_TIMESTEPS": 1e5,
         "UPDATE_EPOCHS": 4,
@@ -373,31 +426,55 @@ if __name__ == "__main__":
         "VF_COEF": 0.5,
         "MAX_GRAD_NORM": 0.5,
         "ACTIVATION": "tanh",
-        "ENV_NAME": "identical_5_vs_5",
+        "ENV_NAME": ["identical_5_vs_5", "identical_20_vs_20"][1],
         "ANNEAL_LR": True,
     }
     rng = jax.random.PRNGKey(30)
-    train = make_train(config)
+    train, env_tuple, make_network = make_train(config)
     train_jit = jax.jit(train)
+
+    if EVAL_EVERY > 0:
+        network = make_network()
+        def action_fn(obs, rng):
+            rng, _rng = jax.random.split(rng)
+            pi, value = network.apply(out["runner_state"][0].params, obs)
+            action = pi.sample(seed=_rng)
+            return action
+
+        # HACK: to handle interdependency of agent observation and visualizer
+        env_config_eval = deepcopy(config["ENV_CONFIG"])
+        env_config_eval["obs_type"] = "rgb_vector"
+        unwrapped_env = make_scenario(config["ENV_NAME"], **env_config_eval)
+        env = GigaStepTupleObsWrapper(unwrapped_env)
+        env = LogMultiAgentWrapper(env)
+        env_tuple = (env, unwrapped_env)
 
     ep_ret_list = []
     pbar = tqdm(range(0, int(ALL_TOTAL_TIMESTEPS), int(config["TOTAL_TIMESTEPS"])))
     pbar.set_description(f"[0/{ALL_TOTAL_TIMESTEPS}] -")
     for i in pbar:
-        tic = time.time()
-        if i == 0:
-            out = train_jit(rng)
-        else:
-            train_state, env_state, obsv, _ = out["runner_state"]
-            out = train_jit(rng, train_state, env_state, obsv)
-        toc = time.time()
+        try:
+            tic = time.time()
+            if i == 0:
+                out = train_jit(rng)
+            else:
+                train_state, env_state, obsv, _ = out["runner_state"]
+                out = train_jit(rng, train_state, env_state, obsv)
+            toc = time.time()
 
-        ep_ret_i = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1).tolist()
-        ep_ret_list.extend(ep_ret_i)
+            ep_ret_i = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1).tolist()
+            ep_ret_list.extend(ep_ret_i)
 
-        pbar.set_description(f"[{i}/{ALL_TOTAL_TIMESTEPS}] {toc-tic}")
+            pbar.set_description(f"[{i}/{ALL_TOTAL_TIMESTEPS}] {toc-tic}")
+
+            current_ts = i + int(config["TOTAL_TIMESTEPS"])
+            if (EVAL_EVERY > 0) and (current_ts % EVAL_EVERY == 0):
+                filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}.gif")
+                generate_gif(env_tuple, action_fn, filepath)
+        except KeyboardInterrupt:
+            break
 
     plt.plot(ep_ret_list)
-    plt.xlabel("Updates")
+    plt.xlabel("Timesteps")
     plt.ylabel("Return")
-    plt.savefig("./test.png")
+    plt.savefig(os.path.join(BASE_DIR, "return.png"))

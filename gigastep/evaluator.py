@@ -16,7 +16,7 @@ class EvaluatiorPolicy:
         raise NotImplementedError()
 
 class Torch_Policy(EvaluatiorPolicy):
-    def __init__(self, env, policy, device = "cpu", vectorize = False):
+    def __init__(self, env, policy, device = "cpu", vectorize = False, switch_side = False):
         self.actor_critic = policy
         if vectorize:
             self.recurrent_hidden_states = torch.zeros(env.n_agents,
@@ -29,6 +29,8 @@ class Torch_Policy(EvaluatiorPolicy):
                               device=device
                 ) if policy is not None else None
         self.n_ego_agents = env.n_teams[0]
+        self.n_opp_agents = env.n_teams[1]
+        self.switch_side = switch_side
         self.device = device
         self.vectorize = vectorize
         self.discrete_actions = env.discrete_actions
@@ -40,8 +42,10 @@ class Torch_Policy(EvaluatiorPolicy):
         if not self.vectorize:
             obs = torch.unsqueeze(obs, 0)
         obs = torch.moveaxis(obs, -1, 2)
-        n_opp = obs.shape[1] - self.n_ego_agents
-        obs = obs[:, :self.n_ego_agents, ::]
+        if self.switch_side:
+            obs = obs[:, self.n_ego_agents:, ::]
+        else:
+            obs = obs[:, :self.n_ego_agents, ::]
         obs = obs.float().contiguous()
         masks = torch.ones(1, 1).to(self.device)
         with torch.no_grad():
@@ -56,10 +60,18 @@ class Torch_Policy(EvaluatiorPolicy):
             action = jnp.array(action.detach().cpu().numpy().astype(np.int32))
         else:
             action = jnp.array(action.detach().cpu().numpy().astype(np.float32))
-        if self.vectorize:
-            action = jnp.pad(action, ((0, 0),(0,n_opp)), 'constant', constant_values=(0))
+
+
+        if self.switch_side:
+            if self.vectorize:
+                action = jnp.pad(action, ((0, 0),(self.n_ego_agents,0)), 'constant', constant_values=(0))
+            else:
+                action = jnp.pad(action, ((self.n_ego_agents,0)), 'constant', constant_values=(0))
         else:
-            action = jnp.pad(action, ((0, n_opp)), 'constant', constant_values=(0))
+            if self.vectorize:
+                action = jnp.pad(action, ((0, 0),(0,self.n_opp_agents)), 'constant', constant_values=(0))
+            else:
+                action = jnp.pad(action, ((0, self.n_opp_agents)), 'constant', constant_values=(0))
 
         return action
 
@@ -243,7 +255,7 @@ class Evaluator:
 
 
 
-def loop_env(env, policy=None, device="cpu", headless=False):
+def loop_env(env, policy=None, device="cpu", headless=False, swith_side = False):
     evaluator = Evaluator(env)
     viewer = GigastepViewer(frame_size=84 * 2, show_num_agents=0 if env.discrete_actions else env.n_agents)
 
@@ -256,7 +268,7 @@ def loop_env(env, policy=None, device="cpu", headless=False):
             key, rng = jax.random.split(rng, 2)
             state, obs = env.reset(key)
             
-            ego = Torch_Policy(policy=policy,env=env,device=device,vectorize = False)
+            ego = Torch_Policy(policy=policy,env=env,device=device,vectorize = False, switch_side = swith_side)
             
             while not ep_done:
                 rng, key, key2 = jax.random.split(rng, 3)
@@ -269,7 +281,10 @@ def loop_env(env, policy=None, device="cpu", headless=False):
 
                 action_opp = opponent.apply(obs, key2)
 
-                action = evaluator.merge_actions(action_ego, action_opp)
+                if swith_side:
+                    action = evaluator.merge_actions(action_ego, action_opp)
+                else:
+                    action = evaluator.merge_actions(action_opp, action_ego)
 
                 rng, key = jax.random.split(rng, 2)
                 state, obs, r, dones, ep_done = env.step(state, action, key)
@@ -289,12 +304,12 @@ def loop_env(env, policy=None, device="cpu", headless=False):
             print(str(evaluator))
             # if frame_idx > 400:
             #     sys.exit(1)
-        break
     return [evaluator.team_a_wins / evaluator.total_games,
-            evaluator.team_b_wins / evaluator.total_games]
+            evaluator.team_b_wins / evaluator.total_games,
+            evaluator.total_games_tie / evaluator.total_games]
 
 
-def loop_env_vectorized(env, policy=None, device="cpu"):
+def loop_env_vectorized(env, policy=None, device="cpu", switch_side = False):
     evaluator = Evaluator(env)
     batch_size = 20
     rng = jax.random.PRNGKey(3)
@@ -336,8 +351,8 @@ def loop_env_vectorized(env, policy=None, device="cpu"):
             print(str(evaluator))
             # if frame_idx > 400:
             #     sys.exit(1)
-        break
 
     return [evaluator.team_a_wins / evaluator.total_games,
-            evaluator.team_b_wins / evaluator.total_games]
+            evaluator.team_b_wins / evaluator.total_games,
+            evaluator.total_games_tie / evaluator.total_games]
 

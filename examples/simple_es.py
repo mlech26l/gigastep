@@ -31,6 +31,7 @@ def replay_policy(env, params):
                 rng, key, key2 = jax.random.split(rng, 3)
                 x1 = jax.nn.tanh(jnp.dot(obs, params["w1"]) + params["b1"])
                 action_ego = jnp.dot(x1, params["w2"]) + params["b2"]
+                # action_ego = evaluator.policies[-1].apply(obs, key2)
 
                 action_opp = opponent.apply(obs, key2)
 
@@ -59,7 +60,7 @@ def replay_policy(env, params):
 def run_n_steps2(params, env):
     evaluator = Evaluator(env)
 
-    batch_size = 64
+    batch_size = 128
     n_steps = 200
     opponent = evaluator.policies[-1]
 
@@ -145,11 +146,13 @@ if __name__ == "__main__":
         obs_type="vector",
         reward_game_won=1,
         reward_defeat_one_opponent=1,
-        reward_detection=1,
+        reward_detection=0,
         reward_damage=1,
         reward_idle=0,
-        reward_agent_disabled=0,
+        reward_agent_disabled=1,
         reward_collision=0,
+        use_stochastic_obs=False,
+        use_stochastic_comm=False,
     )
     params = {
         "w1": jnp.zeros((env.observation_space.shape[0], 10)),
@@ -157,6 +160,10 @@ if __name__ == "__main__":
         "w2": jnp.zeros((10, env.action_space.shape[0])),
         "b2": jnp.zeros(env.action_space.shape[0]),
     }
+    # params = np.load("best_params.npz")
+    # params = {k: params[k] for k in params.files}
+    # replay_policy(env, params)
+
     r = run_n_steps2(params, env)
     print(r)
 
@@ -168,7 +175,7 @@ if __name__ == "__main__":
         b2=pyhopper.float(shape=(env.action_space.shape[0],)),
     )
     best_params = search.run(run_n_steps2, "maximize", "60min", kwargs={"env": env})
-
+    print(f"Ran a total of {search.history.steps[-1]*128*2*200/10e6:0.1f}M steps.")
     sns.set()
     fig, ax = plt.subplots(figsize=(5, 5))
     ax.plot(
@@ -185,3 +192,4 @@ if __name__ == "__main__":
     plt.close(fig)
 
     replay_policy(env, best_params)
+    np.savez("best_params.npz", **best_params)

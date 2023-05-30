@@ -18,6 +18,7 @@ class EvaluatiorPolicy:
 
 class Torch_Policy(EvaluatiorPolicy):
     def __init__(self, env, policy, device = "cpu", vectorize = False, switch_side = False):
+
         self.actor_critic = policy
         if vectorize:
             self.recurrent_hidden_states = (
@@ -53,6 +54,7 @@ class Torch_Policy(EvaluatiorPolicy):
         else:
             obs = obs[:, :self.n_ego_agents, ::]
 
+
         obs = obs.float().contiguous()
         masks = torch.ones(1, 1).to(self.device)
         with torch.no_grad():
@@ -79,6 +81,7 @@ class Torch_Policy(EvaluatiorPolicy):
                 action = jnp.pad(action, ((0, 0),(0,self.n_opp_agents)), 'constant', constant_values=(0))
             else:
                 action = jnp.pad(action, ((0, self.n_opp_agents)), 'constant', constant_values=(0))
+
 
 
         return action
@@ -295,6 +298,7 @@ def loop_env(env, policy=None, device="cpu", headless=False, swith_side = False)
 
             ego = Torch_Policy(policy=policy,env=env,device=device,vectorize = False, switch_side = swith_side)
             
+
             while not ep_done:
                 rng, key, key2 = jax.random.split(rng, 3)
                 if policy is None:
@@ -330,6 +334,7 @@ def loop_env(env, policy=None, device="cpu", headless=False, swith_side = False)
     return [evaluator.team_a_wins / evaluator.total_games,
             evaluator.team_b_wins / evaluator.total_games,
             evaluator.total_games_tie / evaluator.total_games]
+
 
 
 
@@ -376,8 +381,15 @@ def loop_env_vectorized(env, policy=None, device="cpu", switch_side = False):
             # if frame_idx > 400:
             #     sys.exit(1)
 
+<<<<<<< HEAD
     return [evaluator.team_a_wins / evaluator.total_games,
             evaluator.team_b_wins / evaluator.total_games,
             evaluator.total_games_tie / evaluator.total_games]
 
 
+=======
+    return [
+        evaluator.team_a_wins / evaluator.total_games,
+        evaluator.team_b_wins / evaluator.total_games,
+    ]
+>>>>>>> eccbb3586974cd2936c7f5a09e444061ede70888

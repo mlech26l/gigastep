@@ -11,7 +11,13 @@ from PIL import Image
 def loop_user():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("User input")
-    dyn = GigastepEnv(collision_range=0.0)
+    dyn = GigastepEnv(
+        # collision_range=0.0,
+        # min_tracking_time=3,
+        # damage_per_second=1,
+        # max_tracking_time=10,
+        # damage_cone_depth=4.2,
+    )
     rng = jax.random.PRNGKey(1)
     frames = []
     while True:

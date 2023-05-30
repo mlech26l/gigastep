@@ -176,9 +176,9 @@ class GigastepEnv:
             per_agent_range = jnp.ones(n_agents, dtype=jnp.float32)
         self._per_agent_range = per_agent_range
 
-        if obs_type not in ("rgb", "vector", "rbg_vector"):
+        if obs_type not in ("rgb", "vector", "rgb_vector"):
             raise ValueError(
-                f"Unknown obs_type {obs_type} (options: rgb, vector, rbg_vector)"
+                f"Unknown obs_type {obs_type} (options: rgb, vector, rgb_vector)"
             )
         self._obs_type = obs_type
         if per_agent_team is None:

@@ -199,7 +199,7 @@ def make_train(config):
     env = LogMultiAgentWrapper(env)
 
     if config["NETWORK_TYPE"] == "mlp":
-        make_network = partial(ActorCriticMLP, unwrapped_env.action_space.n, activation=config["ACTIVATION"])
+        make_network = partial(ActorCriticMLP, unwrapped_env.action_space.n, activation=config["ACTIVATION"], teams=unwrapped_env.teams)
     elif config["NETWORK_TYPE"] == "lstm":
         # make_network = partial(ActorCriticLSTM, 128, unwrapped_env.action_space.n)
         raise NotImplementedError
@@ -218,9 +218,9 @@ def make_train(config):
             # INIT NETWORK
             rng, _rng = jax.random.split(rng)
             if config["FRAME_STACK_N"] > 1:
-                init_x = jnp.zeros(unwrapped_env.observation_space.shape[:-1] + (unwrapped_env.observation_space.shape[-1] * config["FRAME_STACK_N"],))
+                init_x = jnp.zeros((unwrapped_env.n_agents,) + unwrapped_env.observation_space.shape[:-1] + (unwrapped_env.observation_space.shape[-1] * config["FRAME_STACK_N"],))
             else:
-                init_x = jnp.zeros(unwrapped_env.observation_space.shape)
+                init_x = jnp.zeros((unwrapped_env.n_agents,) + unwrapped_env.observation_space.shape)
             network_params = network.init(_rng, init_x)
             if config["ANNEAL_LR"]:
                 tx = optax.chain(
@@ -332,7 +332,8 @@ def make_train(config):
                         )
 
                         # CALCULATE ACTOR LOSS
-                        ratio = jnp.exp(log_prob - traj_batch.log_prob)
+                        log_ratio = log_prob - traj_batch.log_prob
+                        ratio = jnp.exp(log_ratio)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
@@ -346,6 +347,8 @@ def make_train(config):
                         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
                         loss_actor = loss_actor.mean()
                         entropy = pi.entropy().mean()
+
+                        # approx_kl = jnp.mean(ratio - 1.0 - log_ratio)
 
                         total_loss = (
                             loss_actor
@@ -409,8 +412,8 @@ def make_train(config):
 
 
 if __name__ == "__main__":
-    BASE_DIR = "./logdir/"
-    ALL_TOTAL_TIMESTEPS = 1e7
+    BASE_DIR = "./logdir/exp_33"
+    ALL_TOTAL_TIMESTEPS = 2e7
     EVAL_EVERY = 2e6
     resolution = 84
     config = {
@@ -431,24 +434,26 @@ if __name__ == "__main__":
             "use_stochastic_obs": False,
             "use_stochastic_comm": False,
             "max_agent_in_vec_obs": 100,
+            "max_episode_length": 1024,
         },
         "NETWORK_TYPE": ["mlp", "lstm"][0],
         "FRAME_STACK_N": 4,
         "LR": 4e-4,
+        # each epoch has batch (experience replay buffer) size as num_envs * num_steps
         "NUM_ENVS": 64,
-        "NUM_STEPS": 256,
+        "NUM_STEPS": 1024, # 256,
         "TOTAL_TIMESTEPS": 1e5, # for one train_jit only
         "UPDATE_EPOCHS": 4,
-        "NUM_MINIBATCHES": 4,
+        "NUM_MINIBATCHES": 32, # 4, # determine minibatch_size as buffer_size / num_minibatches; also num of minibatch size within an epoch
         "GAMMA": 0.99,
         "GAE_LAMBDA": 0.95,
         "CLIP_EPS": 0.2,
         "ENT_COEF": 0.01,
         "VF_COEF": 0.5,
         "MAX_GRAD_NORM": 0.1, # 0.5,
-        "ACTIVATION": "tanh",
-        "ENV_NAME": ["identical_5_vs_5", "identical_20_vs_20"][0],
-        "ANNEAL_LR": True,
+        "ACTIVATION": ["relu", "tanh"][1], # "tanh",
+        "ENV_NAME": ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][2],
+        "ANNEAL_LR": False, # True,
     }
     rng = jax.random.PRNGKey(30)
     train, env_tuple, make_network = make_train(config)
@@ -484,7 +489,7 @@ if __name__ == "__main__":
             if (EVAL_EVERY > 0) and ((i == 0) or (current_ts % EVAL_EVERY == 0)):
                 action_fn = partial(action_fn_base, out["runner_state"][0].params)
                 filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}.gif")
-                generate_gif(env_tuple, action_fn, filepath)
+                generate_gif(env_tuple, action_fn, filepath, max_frame_num=config["ENV_CONFIG"]["max_episode_length"])
         except KeyboardInterrupt:
             break
 
@@ -492,3 +497,8 @@ if __name__ == "__main__":
     plt.xlabel("Timesteps")
     plt.ylabel("Return")
     plt.savefig(os.path.join(BASE_DIR, "return.png"))
+
+    for eval_i in range(8):
+        action_fn = partial(action_fn_base, out["runner_state"][0].params)
+        filepath = os.path.join(BASE_DIR, "video", f"eval_{eval_i:02d}.gif")
+        generate_gif(env_tuple, action_fn, filepath, seed=eval_i, max_frame_num=config["ENV_CONFIG"]["max_episode_length"])

@@ -1243,7 +1243,9 @@ class EnvFrameStack():
         states, _ = self.env.reset_done_episodes(states, self.obs, ep_dones, key)
         batch_size = self.stacked_obs.shape[0]
         new_obs = jnp.zeros_like(self.stacked_obs)
-        self.stacked_obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, self.stacked_obs)
+        self.stacked_obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1),
+                                     new_obs,
+                                     self.stacked_obs)
 
         return states, self.stacked_obs
 

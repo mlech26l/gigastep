@@ -48,7 +48,10 @@ class ActorCriticMLP(nn.Module):
         
         actor_mean_team1 = self._infer_actor(x, activation, scope="actor/team1/")
         actor_mean_team2 = self._infer_actor(x, activation, scope="actor/team2/")
+        # ##
         # actor_mean_team2 = jnp.zeros_like(actor_mean_team1) # HACK: fixed behavior
+        # actor_mean_team2 += jax.nn.one_hot(jnp.array(0), actor_mean_team2.shape[-1]) * 1000
+        # ##
         actor_mean = actor_mean_team1 * team1 + actor_mean_team2 * team2
         pi = distrax.Categorical(logits=actor_mean)
 

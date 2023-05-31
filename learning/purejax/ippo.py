@@ -2,6 +2,7 @@ import os
 import time
 from tqdm import tqdm
 from copy import deepcopy
+import argparse
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -9,6 +10,8 @@ import matplotlib.pyplot as plt
 import optax
 from typing import NamedTuple, Any
 from flax.training.train_state import TrainState
+import orbax.checkpoint
+from flax.training import orbax_utils
 from gigastep import make_scenario
 
 import chex
@@ -445,7 +448,11 @@ def make_train(config):
 
 
 if __name__ == "__main__":
-    BASE_DIR = "./logdir/exp_40"
+    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env-name", type=str, default=ENV_NAME)
+    args = parser.parse_args()
+    BASE_DIR = "./logdir/exp_43" # f"./logdir/all/{args.env_name}" # "./logdir/exp_42"
     ALL_TOTAL_TIMESTEPS = 2e7
     EVAL_EVERY = 2e6
     resolution = 84
@@ -453,7 +460,7 @@ if __name__ == "__main__":
         "ENV_CONFIG": {
             "resolution_x": resolution,
             "resolution_y": resolution,
-            "obs_type": "rgb", # "vector",
+            "obs_type": "vector", # "rgb", # "vector",
             "discrete_actions": True,
             "reward_game_won": 100,
             "reward_defeat_one_opponent": 100,
@@ -475,8 +482,8 @@ if __name__ == "__main__":
         "LR": 4e-4,
         # each epoch has batch (experience replay buffer) size as num_envs * num_steps
         "NUM_ENVS": 64,
-        "NUM_STEPS": 16, # 1024, # 256,
-        "TOTAL_TIMESTEPS": 2e3, # 1e5, # for one train_jit only
+        "NUM_STEPS": 256, # 1024, # 256,
+        "TOTAL_TIMESTEPS": 1e5, # 1e5, # for one train_jit only
         "UPDATE_EPOCHS": 4,
         "NUM_MINIBATCHES": 32, # 4, # determine minibatch_size as buffer_size / num_minibatches; also num of minibatch size within an epoch
         "GAMMA": 0.99,
@@ -486,7 +493,7 @@ if __name__ == "__main__":
         "VF_COEF": 0.5,
         "MAX_GRAD_NORM": 0.1, # 0.5,
         "ACTIVATION": ["relu", "tanh"][1], # "tanh",
-        "ENV_NAME": ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0],
+        "ENV_NAME": args.env_name,
         "ANNEAL_LR": False, # True,
     }
     rng = jax.random.PRNGKey(30)
@@ -521,6 +528,13 @@ if __name__ == "__main__":
 
             current_ts = i + int(config["TOTAL_TIMESTEPS"])
             if (EVAL_EVERY > 0) and ((i == 0) or (current_ts % EVAL_EVERY == 0)):
+                if i != 0:
+                    ckpt = {'model': train_state, 'config': config}
+                    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+                    save_args = orbax_utils.save_args_from_target(ckpt)
+                    filepath = os.path.join(BASE_DIR, "ckpt", f"{current_ts:07d}")
+                    orbax_checkpointer.save(filepath, ckpt, save_args=save_args)
+
                 action_fn = partial(action_fn_base, out["runner_state"][0].params)
                 filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}.gif")
                 generate_gif(env_tuple, action_fn, filepath, max_frame_num=config["ENV_CONFIG"]["max_episode_length"])

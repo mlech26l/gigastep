@@ -1136,6 +1136,7 @@ class GigastepEnv:
         batch_size = ep_dones.shape[0]
         rng_key = jax.random.split(rng_key, batch_size)
         new_states, new_obs = self.v_reset(rng_key)
+
         reset_states = jax.tree_util.tree_map(
             lambda x, y: jnp.where(
                 # Create a tuple of (batch_size, 1, ... 1) to broadcast
@@ -1193,3 +1194,70 @@ class GigastepEnv:
     @classmethod
     def action(cls, heading=0, dive=0, speed=0):
         return jnp.array([heading, dive, speed])
+    
+class EnvFrameStack():
+    """
+    Stack the observation frames along the height
+    Only support RGB observation, since the vector observations have speed information
+    """
+    def __init__(self, env, nstack):
+        self.env = env
+        self.nstack = nstack
+
+        obs_space = env.observation_space  # wrapped ob space
+        self.shape_dim_last = obs_space.shape[0]
+        if len(obs_space.shape) == 3:
+            low = jnp.repeat(obs_space.low, self.nstack, axis=0)
+            high = jnp.repeat(obs_space.high, self.nstack, axis=0)
+        else:
+            raise NotImplementedError("Stack env only support RGB observation")
+
+
+        self.stacked_obs = None
+
+        self.observation_space = Box(low=low, high=high)
+
+
+    def v_step(self, states, actions, key):
+
+        states, obs, r, d, ep_dones = self.env.v_step(states, actions, key)
+
+        if self.stacked_obs is None:
+            self.stacked_obs = jnp.zeros(
+                (obs.shape[0],obs.shape[1],
+                 self.nstack*obs.shape[2],
+                 *obs.shape[3:]
+                 ),
+                dtype=obs.dtype)
+
+        self.stacked_obs = self.stacked_obs.at[:,:,:-self.shape_dim_last,:, :].\
+            set(self.stacked_obs[:,:, self.shape_dim_last:, :, : ])
+
+        self.obs = obs
+
+        self.stacked_obs = self.stacked_obs.at[:,:, -self.shape_dim_last:,:,:].set(obs)
+
+        return states, self.stacked_obs, r, d, ep_dones
+
+    def reset_done_episodes(self, states, obs, ep_dones, key):
+        states, _ = self.env.reset_done_episodes(states, self.obs, ep_dones, key)
+        batch_size = self.stacked_obs.shape[0]
+        new_obs = jnp.zeros_like(self.stacked_obs)
+        self.stacked_obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1),
+                                     new_obs,
+                                     self.stacked_obs)
+
+        return states, self.stacked_obs
+
+    def v_reset(self, key):
+        states, obs = self.env.v_reset(key)
+        self.obs = obs
+
+        return states, obs
+
+    def reset(self):
+        obs = self.env.reset()
+        self.stacked_obs[:, -self.shape_dim_last:] = obs
+        self.obs = obs
+        return self.stacked_obs
+

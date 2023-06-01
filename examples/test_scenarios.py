@@ -53,6 +53,7 @@ def loop_env(env):
 
 if __name__ == "__main__":
     # convert -delay 3 -loop 0 video/scenario/frame_*.png video/scenario.webp
-    loop_env(env=make_scenario("identical_20_vs_20", use_stochastic_comm=False))
+    # loop_env(env=make_scenario("identical_20_vs_20", use_stochastic_comm=False))
+    loop_env(env=make_scenario("special_20_vs_20", use_stochastic_comm=False))
     # loop_env(env = make_scenario("identical_20_vs_20"))
     # loop_env(env = make_scenario("identical_20_vs_20"))

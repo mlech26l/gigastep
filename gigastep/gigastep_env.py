@@ -250,8 +250,8 @@ class GigastepEnv:
             self.action_space = Box(low=-jnp.ones(3), high=jnp.ones(3))
 
         self._v_step_agents = jax.vmap(self._step_agents)
-        self.v_step = jax.vmap(self.step)
-        self.v_reset = jax.vmap(self.reset)
+        self.v_step = jax.jit(jax.vmap(self.step))
+        self.v_reset = jax.jit(jax.vmap(self.reset))
         self.v_set_aux_reward_factor = jax.vmap(
             self.set_aux_reward_factor, in_axes=(0, None)
         )
@@ -1194,12 +1194,14 @@ class GigastepEnv:
     @classmethod
     def action(cls, heading=0, dive=0, speed=0):
         return jnp.array([heading, dive, speed])
-    
-class EnvFrameStack():
+
+
+class EnvFrameStack:
     """
     Stack the observation frames along the height
     Only support RGB observation, since the vector observations have speed information
     """
+
     def __init__(self, env, nstack):
         self.env = env
         self.nstack = nstack
@@ -1212,30 +1214,33 @@ class EnvFrameStack():
         else:
             raise NotImplementedError("Stack env only support RGB observation")
 
-
         self.stacked_obs = None
 
         self.observation_space = Box(low=low, high=high)
 
-
     def v_step(self, states, actions, key):
-
         states, obs, r, d, ep_dones = self.env.v_step(states, actions, key)
 
         if self.stacked_obs is None:
             self.stacked_obs = jnp.zeros(
-                (obs.shape[0],obs.shape[1],
-                 self.nstack*obs.shape[2],
-                 *obs.shape[3:]
-                 ),
-                dtype=obs.dtype)
+                (
+                    obs.shape[0],
+                    obs.shape[1],
+                    self.nstack * obs.shape[2],
+                    *obs.shape[3:],
+                ),
+                dtype=obs.dtype,
+            )
 
-        self.stacked_obs = self.stacked_obs.at[:,:,:-self.shape_dim_last,:, :].\
-            set(self.stacked_obs[:,:, self.shape_dim_last:, :, : ])
+        self.stacked_obs = self.stacked_obs.at[:, :, : -self.shape_dim_last, :, :].set(
+            self.stacked_obs[:, :, self.shape_dim_last :, :, :]
+        )
 
         self.obs = obs
 
-        self.stacked_obs = self.stacked_obs.at[:,:, -self.shape_dim_last:,:,:].set(obs)
+        self.stacked_obs = self.stacked_obs.at[:, :, -self.shape_dim_last :, :, :].set(
+            obs
+        )
 
         return states, self.stacked_obs, r, d, ep_dones
 
@@ -1243,9 +1248,9 @@ class EnvFrameStack():
         states, _ = self.env.reset_done_episodes(states, self.obs, ep_dones, key)
         batch_size = self.stacked_obs.shape[0]
         new_obs = jnp.zeros_like(self.stacked_obs)
-        self.stacked_obs = jnp.where(ep_dones.reshape(batch_size, 1, 1, 1, 1),
-                                     new_obs,
-                                     self.stacked_obs)
+        self.stacked_obs = jnp.where(
+            ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, self.stacked_obs
+        )
 
         return states, self.stacked_obs
 
@@ -1257,7 +1262,6 @@ class EnvFrameStack():
 
     def reset(self):
         obs = self.env.reset()
-        self.stacked_obs[:, -self.shape_dim_last:] = obs
+        self.stacked_obs[:, -self.shape_dim_last :] = obs
         self.obs = obs
         return self.stacked_obs
-

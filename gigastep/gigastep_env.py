@@ -540,7 +540,7 @@ class GigastepEnv:
 
         if self.reward_defeat_one_opponent > 0:
             reward_defeat_one_opponent = (
-                (alive_team1 - alive_team1_pre)
+                (alive_team1 - alive_team1_pre)  #  * 0.5
                 * (teams == 0)
                 * alive
                 / (alive_team1 + 1)
@@ -552,7 +552,7 @@ class GigastepEnv:
                 * (teams == 1)
                 * alive
                 / (alive_team2 + 1)
-                + (alive_team2 - alive_team2_pre)
+                + (alive_team2 - alive_team2_pre)  #  * 0.5
                 * (teams == 1)
                 * alive
                 / (alive_team2 + 1)

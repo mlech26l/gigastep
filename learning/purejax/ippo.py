@@ -2,12 +2,16 @@ import os
 import time
 from tqdm import tqdm
 from copy import deepcopy
+import argparse
+import numpy as np
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 from typing import NamedTuple, Any
 from flax.training.train_state import TrainState
+import orbax.checkpoint
+from flax.training import orbax_utils
 from gigastep import make_scenario
 
 import chex
@@ -118,6 +122,31 @@ class FrameStackWrapper(GymnaxWrapper):
         return obs, state, reward, done, {} # replace last argument with empty info
 
 
+class ImageObsWrapper(GymnaxWrapper):
+    @partial(jax.jit, static_argnums=(0,))
+    def reset(
+        self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None
+    ) -> Tuple[chex.Array, environment.EnvState]:
+        obs, state = self._env.reset(key)
+        obs = self._process_obs(obs)
+        return obs, state
+
+    @partial(jax.jit, static_argnums=(0,))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: environment.EnvState,
+        action: Union[int, float],
+        params: Optional[environment.EnvParams] = None,
+    ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
+        obs, state, reward, done, info = self._env.step(key, state, action)
+        obs = self._process_obs(obs)
+        return obs, state, reward, done, info
+    
+    def _process_obs(self, obs):
+        return obs.reshape(obs.shape[0], -1)
+
+
 @struct.dataclass
 class LogMultiAgentEnvState:
     env_state: environment.EnvState
@@ -196,10 +225,14 @@ def make_train(config):
     env = GigaStepWrapper(unwrapped_env)
     if config["FRAME_STACK_N"] > 1:
         env = FrameStackWrapper(env, config["FRAME_STACK_N"])
+    if config["ENV_CONFIG"]["obs_type"] == "rgb":
+        env = ImageObsWrapper(env)
     env = LogMultiAgentWrapper(env)
 
     if config["NETWORK_TYPE"] == "mlp":
-        make_network = partial(ActorCriticMLP, unwrapped_env.action_space.n, activation=config["ACTIVATION"])
+        make_network = partial(ActorCriticMLP, unwrapped_env.action_space.n, activation=config["ACTIVATION"],
+                               teams=unwrapped_env.teams, has_cnn=config["ENV_CONFIG"]["obs_type"]=="rgb" and config["USE_CNN"],
+                               obs_shape=unwrapped_env.observation_space.shape)
     elif config["NETWORK_TYPE"] == "lstm":
         # make_network = partial(ActorCriticLSTM, 128, unwrapped_env.action_space.n)
         raise NotImplementedError
@@ -218,9 +251,12 @@ def make_train(config):
             # INIT NETWORK
             rng, _rng = jax.random.split(rng)
             if config["FRAME_STACK_N"] > 1:
-                init_x = jnp.zeros(unwrapped_env.observation_space.shape[:-1] + (unwrapped_env.observation_space.shape[-1] * config["FRAME_STACK_N"],))
+                init_x = jnp.zeros((unwrapped_env.n_agents,) + unwrapped_env.observation_space.shape[:-1] + (unwrapped_env.observation_space.shape[-1] * config["FRAME_STACK_N"],))
             else:
-                init_x = jnp.zeros(unwrapped_env.observation_space.shape)
+                if (config["ENV_CONFIG"]["obs_type"] == "rgb") and not config["USE_CNN"]: # HACK
+                    init_x = jnp.zeros((unwrapped_env.n_agents,) + (np.prod(unwrapped_env.observation_space.shape),))
+                else:
+                    init_x = jnp.zeros((unwrapped_env.n_agents,) + unwrapped_env.observation_space.shape)
             network_params = network.init(_rng, init_x)
             if config["ANNEAL_LR"]:
                 tx = optax.chain(
@@ -332,7 +368,8 @@ def make_train(config):
                         )
 
                         # CALCULATE ACTOR LOSS
-                        ratio = jnp.exp(log_prob - traj_batch.log_prob)
+                        log_ratio = log_prob - traj_batch.log_prob
+                        ratio = jnp.exp(log_ratio)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
@@ -346,6 +383,8 @@ def make_train(config):
                         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
                         loss_actor = loss_actor.mean()
                         entropy = pi.entropy().mean()
+
+                        # approx_kl = jnp.mean(ratio - 1.0 - log_ratio)
 
                         total_loss = (
                             loss_actor
@@ -409,15 +448,19 @@ def make_train(config):
 
 
 if __name__ == "__main__":
-    BASE_DIR = "./logdir/"
-    ALL_TOTAL_TIMESTEPS = 1e7
+    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env-name", type=str, default=ENV_NAME)
+    args = parser.parse_args()
+    BASE_DIR = "./logdir/exp_43" # f"./logdir/all/{args.env_name}" # "./logdir/exp_42"
+    ALL_TOTAL_TIMESTEPS = 2e7
     EVAL_EVERY = 2e6
     resolution = 84
     config = {
         "ENV_CONFIG": {
             "resolution_x": resolution,
             "resolution_y": resolution,
-            "obs_type": "vector",
+            "obs_type": "vector", # "rgb", # "vector",
             "discrete_actions": True,
             "reward_game_won": 100,
             "reward_defeat_one_opponent": 100,
@@ -431,24 +474,27 @@ if __name__ == "__main__":
             "use_stochastic_obs": False,
             "use_stochastic_comm": False,
             "max_agent_in_vec_obs": 100,
+            "max_episode_length": 256, # 1024,
         },
         "NETWORK_TYPE": ["mlp", "lstm"][0],
-        "FRAME_STACK_N": 4,
+        "USE_CNN": False,
+        "FRAME_STACK_N": 1,
         "LR": 4e-4,
+        # each epoch has batch (experience replay buffer) size as num_envs * num_steps
         "NUM_ENVS": 64,
-        "NUM_STEPS": 256,
-        "TOTAL_TIMESTEPS": 1e5, # for one train_jit only
+        "NUM_STEPS": 256, # 1024, # 256,
+        "TOTAL_TIMESTEPS": 1e5, # 1e5, # for one train_jit only
         "UPDATE_EPOCHS": 4,
-        "NUM_MINIBATCHES": 4,
+        "NUM_MINIBATCHES": 32, # 4, # determine minibatch_size as buffer_size / num_minibatches; also num of minibatch size within an epoch
         "GAMMA": 0.99,
         "GAE_LAMBDA": 0.95,
         "CLIP_EPS": 0.2,
         "ENT_COEF": 0.01,
         "VF_COEF": 0.5,
         "MAX_GRAD_NORM": 0.1, # 0.5,
-        "ACTIVATION": "tanh",
-        "ENV_NAME": ["identical_5_vs_5", "identical_20_vs_20"][0],
-        "ANNEAL_LR": True,
+        "ACTIVATION": ["relu", "tanh"][1], # "tanh",
+        "ENV_NAME": args.env_name,
+        "ANNEAL_LR": False, # True,
     }
     rng = jax.random.PRNGKey(30)
     train, env_tuple, make_network = make_train(config)
@@ -482,9 +528,16 @@ if __name__ == "__main__":
 
             current_ts = i + int(config["TOTAL_TIMESTEPS"])
             if (EVAL_EVERY > 0) and ((i == 0) or (current_ts % EVAL_EVERY == 0)):
+                if i != 0:
+                    ckpt = {'model': train_state, 'config': config}
+                    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+                    save_args = orbax_utils.save_args_from_target(ckpt)
+                    filepath = os.path.join(BASE_DIR, "ckpt", f"{current_ts:07d}")
+                    orbax_checkpointer.save(filepath, ckpt, save_args=save_args)
+
                 action_fn = partial(action_fn_base, out["runner_state"][0].params)
                 filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}.gif")
-                generate_gif(env_tuple, action_fn, filepath)
+                generate_gif(env_tuple, action_fn, filepath, max_frame_num=config["ENV_CONFIG"]["max_episode_length"])
         except KeyboardInterrupt:
             break
 
@@ -492,3 +545,8 @@ if __name__ == "__main__":
     plt.xlabel("Timesteps")
     plt.ylabel("Return")
     plt.savefig(os.path.join(BASE_DIR, "return.png"))
+
+    for eval_i in range(8):
+        action_fn = partial(action_fn_base, out["runner_state"][0].params)
+        filepath = os.path.join(BASE_DIR, "video", f"eval_{eval_i:02d}.gif")
+        generate_gif(env_tuple, action_fn, filepath, seed=eval_i, max_frame_num=config["ENV_CONFIG"]["max_episode_length"])

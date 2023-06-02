@@ -1,6 +1,7 @@
 import sys
 import time
 
+import PIL.Image
 import numpy as np
 import pyhopper
 import jax
@@ -12,6 +13,57 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 SLEEP_TIME = 0.01
+from PIL import Image
+
+
+def circle_vs_straight(env):
+    evaluator = Evaluator(env)
+    viewer = GigastepViewer(84 * 4, show_num_agents=0)
+
+    rng = jax.random.PRNGKey(3)
+    img_list = []
+    while True:
+        ep_done = False
+        key, rng = jax.random.split(rng, 2)
+        state, obs = env.reset(key)
+        while not ep_done:
+            rng, key, key2 = jax.random.split(rng, 3)
+            action_ego = jnp.zeros((env.n_agents, 3))
+            # action_opp = jnp.repeat(jnp.array([[1.0, 0.0, 00]]), env.n_agents, axis=0)
+            action_opp = jnp.zeros((env.n_agents, 3))
+
+            action = evaluator.merge_actions(action_ego, action_opp)
+
+            rng, key = jax.random.split(rng, 2)
+            state, obs, r, dones, ep_done = env.step(state, action, key)
+            evaluator.update_step(r, dones, ep_done)
+
+            img = viewer.draw(env, state, obs)
+            # img_list.append(PIL.Image.fromarray(img))
+            # if len(img_list) == 400:
+            #     # create gif
+            #     img_list[0].save(
+            #         "circle_vs_straight.gif",
+            #         save_all=True,
+            #         append_images=img_list[1:],
+            #         optimize=False,
+            #         duration=20,
+            #         loop=0,
+            #     )
+            #     sys.exit(1)
+            if viewer.should_pause:
+                while True:
+                    img = viewer.draw(env, state, obs)
+                    time.sleep(SLEEP_TIME)
+                    if viewer.should_pause:
+                        break
+            if viewer.should_quit:
+                sys.exit(1)
+            time.sleep(SLEEP_TIME)
+        evaluator.update_episode()
+        print(str(evaluator))
+        # if frame_idx > 400:
+        #     sys.exit(1)
 
 
 def replay_policy(env, params):
@@ -30,7 +82,7 @@ def replay_policy(env, params):
             while not ep_done:
                 rng, key, key2 = jax.random.split(rng, 3)
                 x1 = jax.nn.tanh(jnp.dot(obs, params["w1"]) + params["b1"])
-                action_ego = jnp.dot(x1, params["w2"]) + params["b2"]
+                action_ego = jax.nn.tanh(jnp.dot(x1, params["w2"]) + params["b2"])
                 # action_ego = evaluator.policies[-1].apply(obs, key2)
 
                 action_opp = opponent.apply(obs, key2)
@@ -61,7 +113,7 @@ def run_n_steps2(params, env):
     evaluator = Evaluator(env)
 
     batch_size = 128
-    n_steps = 200
+    n_steps = 1000
     # opponent = evaluator.policies[-1]
 
     rng = jax.random.PRNGKey(2)
@@ -165,17 +217,21 @@ if __name__ == "__main__":
     # params = {k: params[k] for k in params.files}
     # replay_policy(env, params)
 
+    # circle_vs_straight(env)
+    # import sys
+    #
+    # sys.exit()
     r = run_n_steps2(params, env)
     print(r)
 
-    hidden = 32
+    hidden = 64
     search = pyhopper.Search(
         w1=pyhopper.float(shape=(env.observation_space.shape[0], hidden)),
         b1=pyhopper.float(shape=(hidden,)),
         w2=pyhopper.float(shape=(hidden, env.action_space.shape[0])),
         b2=pyhopper.float(shape=(env.action_space.shape[0],)),
     )
-    best_params = search.run(run_n_steps2, "maximize", "60min", kwargs={"env": env})
+    best_params = search.run(run_n_steps2, "maximize", "220min", kwargs={"env": env})
     print(f"Ran a total of {search.history.steps[-1]*128*2*200/10e6:0.1f}M steps.")
     sns.set()
     fig, ax = plt.subplots(figsize=(5, 5))

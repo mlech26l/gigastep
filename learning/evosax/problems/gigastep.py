@@ -41,13 +41,15 @@ class GigastepFitness(object):
         # Keep track of total steps executed in environment
         self.total_env_steps = 0
 
-    def set_apply_fn(self, network_apply, carry_init=None):
+    def set_apply_fn(self, network_ego_apply, network_ado_apply, carry_ego_init=None, carry_ado_init=None):
         """Set the network forward function."""
-        self.network = network_apply
+        self.network_ego = network_ego_apply
+        self.network_ado = network_ado_apply
         # Set rollout function based on model architecture
-        if carry_init is not None:
+        if carry_ego_init is not None or carry_ado_init is not None:
             self.single_rollout = self.rollout_rnn
-            self.carry_init = carry_init
+            self.carry_ego_init = carry_ego_init
+            self.carry_ado_init = carry_ado_init
         else:
             self.single_rollout = self.rollout_ffw
         self.rollout_repeats = jax.vmap(self.single_rollout, in_axes=(0, None, None))
@@ -126,8 +128,8 @@ class GigastepFitness(object):
             obs_ego = obs[:self.ego_team_size]
             obs_ado = obs[self.ego_team_size:]
 
-            action_ego, action_info = self.network(ego_policy_params, obs_ego, rng=rng_net)
-            action_ado, _ = self.network(ado_policy_params, obs_ado, rng=rng_net)
+            action_ego, action_info = self.network_ego(ego_policy_params, obs_ego, rng=rng_net)
+            action_ado, _ = self.network_ado(ado_policy_params, obs_ado, rng=rng_net)
             action = jnp.concatenate((action_ego, action_ado), axis=0)
 
             next_s, next_o, reward, dones, done = self.env.step(
@@ -197,8 +199,8 @@ class GigastepFitness(object):
         rng, rng_reset = jax.random.split(rng_input)
         state, obs = self.env.reset(rng_reset)
 
-        hidden_ego = self.carry_init(batch_dims=(self.ego_team_size,))
-        hidden_ado = self.carry_init(batch_dims=(self.ado_team_size,))
+        hidden_ego = self.carry_ego_init(batch_dims=(self.ego_team_size,))
+        hidden_ado = self.carry_ado_init(batch_dims=(self.ado_team_size,))
 
         def policy_step(state_input, tmp):
             """lax.scan compatible step transition in jax env."""
@@ -218,8 +220,8 @@ class GigastepFitness(object):
             obs_ego = obs[:self.ego_team_size]
             obs_ado = obs[self.ego_team_size:]
 
-            hidden_ego, action_ego, action_info = self.network(ego_policy_params, obs_ego, hidden_ego, rng_net)
-            hidden_ado, action_ado, _ = self.network(ado_policy_params, obs_ado, hidden_ado, rng_net)
+            hidden_ego, action_ego, action_info = self.network_ego(ego_policy_params, obs_ego, hidden_ego, rng_net)
+            hidden_ado, action_ado, _ = self.network_ado(ado_policy_params, obs_ado, hidden_ado, rng_net)
             action = jnp.concatenate((action_ego, action_ado), axis=0)
 
             next_s, next_o, reward, dones, done = self.env.step(

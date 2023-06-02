@@ -24,6 +24,8 @@ import yaml
 
 def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_type="CNN"):
     
+    rng_ego, rng_ado = jax.random.split(rng, 2)
+    
     output_activation = "tanh_gaussian"  # "tanh_gaussian"
     output_dimensions = 3
     if "discrete_actions" in env_cfg:
@@ -32,25 +34,42 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_type="CNN")
             output_dimensions = 9
 
     if net_type=="MLP":
-        network = NetworkMapperGiga["MLP"](
+        ### Ego
+        network_ego = NetworkMapperGiga["MLP"](
             num_hidden_units=256,
             num_hidden_layers=2,
             num_output_units=output_dimensions,
             hidden_activation="relu",
             output_activation=output_activation,
         )
-        pholder = jnp.zeros((1, *train_evaluator.env.observation_space.low.shape))
-        net_params = network.init(
-            rng,
-            x=pholder,
-            rng=rng,
+        pholder_ego = jnp.zeros((1, *train_evaluator.env.observation_space.low.shape))
+        net_ego_params = network_ego.init(
+            rng_ego,
+            x=pholder_ego,
+            rng=rng_ego,
         )
 
-        train_evaluator.set_apply_fn(network.apply)
-        test_evaluator.set_apply_fn(network.apply)
+        ### Ado
+        network_ado = NetworkMapperGiga["MLP"](
+            num_hidden_units=256,
+            num_hidden_layers=2,
+            num_output_units=output_dimensions,
+            hidden_activation="relu",
+            output_activation=output_activation,
+        )
+        pholder_ado = jnp.zeros((1, *train_evaluator.env.observation_space.low.shape))
+        net_ado_params = network_ado.init(
+            rng_ado,
+            x=pholder_ado,
+            rng=rng_ado,
+        )
+
+        train_evaluator.set_apply_fn(network_ego.apply, network_ado.apply)
+        test_evaluator.set_apply_fn(network_ego.apply, network_ado.apply)
 
     elif net_type=="CNN":
-        network = NetworkMapperGiga["CNN"](
+        ### Ego
+        network_ego = NetworkMapperGiga["CNN"](
             depth_1=1,
             depth_2=1,
             features_1=32,
@@ -65,36 +84,76 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_type="CNN")
             output_activation=output_activation,
         )
         # Channel last configuration for conv!
-        pholder = jnp.zeros((1, *train_evaluator.env.resolution, 3))
-        net_params = network.init(
-            rng,
-            x=pholder,
-            rng=rng,
+        pholder_ego = jnp.zeros((1, *train_evaluator.env.resolution, 3))
+        net_ego_params = network_ego.init(
+            rng_ego,
+            x=pholder_ego,
+            rng=rng_ego,
         )
 
-        train_evaluator.set_apply_fn(network.apply)
-        test_evaluator.set_apply_fn(network.apply)
+        ### Ado
+        network_ado = NetworkMapperGiga["CNN"](
+            depth_1=1,
+            depth_2=1,
+            features_1=32,
+            features_2=64,
+            kernel_1=8,
+            kernel_2=4,
+            strides_1=2,
+            strides_2=1,
+            num_linear_layers=1,
+            num_hidden_units=64,
+            num_output_units=output_dimensions,
+            output_activation=output_activation,
+        )
+        # Channel last configuration for conv!
+        pholder_ado = jnp.zeros((1, *train_evaluator.env.resolution, 3))
+        net_ado_params = network_ado.init(
+            rng_ado,
+            x=pholder_ado,
+            rng=rng_ado,
+        )
+
+        train_evaluator.set_apply_fn(network_ego.apply, network_ado.apply)
+        test_evaluator.set_apply_fn(network_ego.apply, network_ado.apply)
 
     elif net_type=='LSTM':
-        network = NetworkMapperGiga["LSTM"](
+        ### Ego
+        network_ego = NetworkMapperGiga["LSTM"](
             num_hidden_units=32,  # 32,
             num_output_units=output_dimensions,
             output_activation=output_activation,
         )
-        pholder = jnp.zeros((1, *train_evaluator.env.observation_space.low.shape))
-        carry_init = network.initialize_carry()
-        net_params = network.init(
-            rng,
-            x=pholder,
-            carry=carry_init,
-            rng=rng,
+        pholder_ego = jnp.zeros((1, *train_evaluator.env.observation_space.low.shape))
+        carry_ego_init = network_ego.initialize_carry()
+        net_ego_params = network_ego.init(
+            rng_ego,
+            x=pholder_ego,
+            carry=carry_ego_init,
+            rng=rng_ego,
         )
 
-        train_evaluator.set_apply_fn(network.apply, network.initialize_carry)
-        test_evaluator.set_apply_fn(network.apply, network.initialize_carry)
+        ### Ado
+        network_ado = NetworkMapperGiga["LSTM"](
+            num_hidden_units=32,  # 32,
+            num_output_units=output_dimensions,
+            output_activation=output_activation,
+        )
+        pholder_ado = jnp.zeros((1, *train_evaluator.env.observation_space.low.shape))
+        carry_ado_init = network_ado.initialize_carry()
+        net_ado_params = network_ado.init(
+            rng_ado,
+            x=pholder_ado,
+            carry=carry_ado_init,
+            rng=rng_ado,
+        )
+
+        train_evaluator.set_apply_fn(network_ego.apply, network_ado.apply, network.initialize_carry)
+        test_evaluator.set_apply_fn(network_ego.apply, network_ado.apply, network.initialize_carry)
 
     elif net_type=="LSTM_CNN":
-        network = NetworkMapperGiga["LSTM_CNN"](
+        ### Ego
+        network_ego = NetworkMapperGiga["LSTM_CNN"](
             # CNN
             num_output_units_cnn=128,  # 64,
             depth_1=1,
@@ -114,22 +173,52 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_type="CNN")
             output_activation_lstm=output_activation,
         )
         # Channel last configuration for conv!
-        pholder = jnp.zeros((1, *train_evaluator.env.resolution, 3))
-        carry_init = network.initialize_carry(batch_dims=(1,))
-        net_params = network.init(
-            rng,
-            x=pholder,
-            carry=carry_init,
-            rng=rng,
+        pholder_ego = jnp.zeros((1, *train_evaluator.env.resolution, 3))
+        carry_ego_init = network_ego.initialize_carry(batch_dims=(1,))
+        net_ego_params = network_ego.init(
+            rng_ego,
+            x=pholder_ego,
+            carry=carry_ego_init,
+            rng=rng_ego,
         )
 
-        train_evaluator.set_apply_fn(network.apply, network.initialize_carry)
-        test_evaluator.set_apply_fn(network.apply, network.initialize_carry)
+        ### Ado
+        network_ado = NetworkMapperGiga["LSTM_CNN"](
+            # CNN
+            num_output_units_cnn=128,  # 64,
+            depth_1=1,
+            depth_2=1,
+            features_1=32,
+            features_2=64,
+            kernel_1=8,
+            kernel_2=4,
+            strides_1=2,
+            strides_2=1,
+            num_linear_layers_cnn=1,
+            num_hidden_units_cnn=64,
+            output_activation_cnn="identity",
+            # LSTM
+            num_hidden_units_lstm=64,
+            num_output_units_lstm=output_dimensions,
+            output_activation_lstm=output_activation,
+        )
+        # Channel last configuration for conv!
+        pholder_ado = jnp.zeros((1, *train_evaluator.env.resolution, 3))
+        carry_ado_init = network_ado.initialize_carry(batch_dims=(1,))
+        net_ado_params = network_ado.init(
+            rng_ado,
+            x=pholder_ado,
+            carry=carry_ado_init,
+            rng=rng_ado,
+        )
+
+        train_evaluator.set_apply_fn(network_ego.apply, network_ado.apply, network_ego.initialize_carry, network_ado.initialize_carry)
+        test_evaluator.set_apply_fn(network_ego.apply, network_ado.apply, network_ego.initialize_carry, network_ado.initialize_carry)
       
     else:
         raise NotImplementedError
 
-    return net_params, train_evaluator, test_evaluator
+    return net_ego_params, net_ado_params, train_evaluator, test_evaluator
 
 
 def run_gigastep_fitness(
@@ -173,10 +262,12 @@ def run_gigastep_fitness(
 
         # Initialize network depending on type
         out = network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_type=network_type)
-        (net_params, train_evaluator, test_evaluator) = out
+        (net_ego_params, net_ado_params, train_evaluator, test_evaluator) = out
 
-        train_param_reshaper = ParameterReshaper(net_params, n_devices=n_devices)
-        test_param_reshaper = ParameterReshaper(net_params, n_devices=1)
+        train_param_ego_reshaper = ParameterReshaper(net_ego_params, n_devices=n_devices)
+        test_param_ego_reshaper = ParameterReshaper(net_ego_params, n_devices=1)
+        train_param_ado_reshaper = ParameterReshaper(net_ado_params, n_devices=n_devices)
+        test_param_ado_reshaper = ParameterReshaper(net_ado_params, n_devices=1)
 
         if "strategy" in alg_cfg.keys():
             strategy_params = alg_cfg["strategy"]
@@ -194,17 +285,17 @@ def run_gigastep_fitness(
         # else:
         #     pass
 
-        strategy = Strategies[s_name](**strategy_params, num_dims=train_param_reshaper.total_params, maximize=True)
-        es_params = strategy.default_params
+        strategy_ego = Strategies[s_name](**strategy_params, num_dims=train_param_ego_reshaper.total_params, maximize=True)
+        es_ego_params = strategy_ego.default_params
         if "params" in alg_cfg.keys():
             es_params = es_params.replace(**alg_cfg["params"])
         # if s_name=="DES":
         #     es_params = es_params.replace(lrate_mean=0.01, lrate_sigma=0.01, init_max=1.0)
-        es_state = strategy.initialize(rng, es_params)
-        es_state_mean = es_state.mean.copy()
+        es_ego_state = strategy_ego.initialize(rng, es_params)
+        es_ego_state_mean = es_ego_state.mean.copy()
 
         es_logging = ESLog(
-            num_dims=train_param_reshaper.total_params,
+            num_dims=train_param_ego_reshaper.total_params,
             num_generations=num_generations,
             top_k=5,
             maximize=True,

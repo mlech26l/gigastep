@@ -27,8 +27,12 @@ def run_vmapped_no_scan(env, params, batch_size, n_steps, repeats=1):
         states, obs = env.v_reset(key)
         for i in range(n_steps):
             rng, key = jax.random.split(rng, 2)
-            actions = params.apply_fn(params.params, obs)
-            # actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+            if params is None:
+                actions = jnp.zeros(
+                    (batch_size, env.n_agents, env.action_space.shape[0])
+                )
+            else:
+                actions = params.apply_fn(params.params, obs)
             key = jax.random.split(key, batch_size)
             states, obs, r, a, d = env.v_step(states, actions, key)
     obs.block_until_ready()
@@ -39,8 +43,10 @@ def run_vmapped_scan(env, params, batch_size, n_steps, repeats=1):
 
     def policy_step(state_carry, tmp):
         states, obs, rng = state_carry
-        actions = params.apply_fn(params.params, obs)
-        # actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+        if params is None:
+            actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+        else:
+            actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
         key = jax.random.split(key, batch_size)
         states, obs, r, a, d = env.v_step(states, actions, key)
@@ -63,8 +69,12 @@ def run_single_no_scan(env, params, n_steps, repeats=1):
         states, obs = env.reset(key)
         for i in range(n_steps):
             rng, key = jax.random.split(rng, 2)
-            actions = params.apply_fn(params.params, obs)
-            # actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
+            if params is None:
+                actions = jnp.zeros(
+                    (batch_size, env.n_agents, env.action_space.shape[0])
+                )
+            else:
+                actions = params.apply_fn(params.params, obs)
             states, obs, r, a, d = env.step(states, actions, key)
     obs.block_until_ready()
 
@@ -74,8 +84,10 @@ def run_single_scan(env, params, n_steps, repeats=1):
 
     def policy_step(state_carry, tmp):
         states, obs, rng = state_carry
-        actions = params.apply_fn(params.params, obs)
-        # actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
+        if params is None:
+            actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+        else:
+            actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
         states, obs, r, a, d = env.step(states, actions, key)
         carry = [states, obs, rng]
@@ -194,7 +206,7 @@ class MLPPolicy(nn.Module):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=4096 * 16, type=int)  # in minutes
+    parser.add_argument("--batch_size", default=4096, type=int)  # in minutes
     parser.add_argument("--repeats", default=5, type=int)  # in minutes
     parser.add_argument("--n_agents", default=20, type=int)  # in minutes
     parser.add_argument("--n_steps", default=2000, type=int)  # in minutes
@@ -213,7 +225,7 @@ def main():
         policy = ConvPolicy(num_outputs=env.action_space.shape[0])
         input_shape = (1, 84, 84, 4)
     nn_state = create_train_state(policy, jax.random.PRNGKey(0), input_shape)
-
+    nn_state = None
     with GigastepTimer(
         "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
     ):

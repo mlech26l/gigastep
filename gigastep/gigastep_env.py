@@ -598,18 +598,20 @@ class GigastepEnv:
         # Negative reward for dying (health drops to 0)
 
         if self.reward_collision_agent > 0:
-            reward_collision_agent = (
-                collided
-            )
+            reward_collision_agent = collided
             reward = reward - self.reward_collision_agent * reward_collision_agent
-            reward_info["reward_collision_agent"] = -self.reward_collision_agent * reward_collision_agent
+            reward_info["reward_collision_agent"] = (
+                -self.reward_collision_agent * reward_collision_agent
+            )
 
         if self.reward_collision_obstacle > 0:
             reward_collision_obstacle = (
                 out_of_bounds + hit_box * self.collision_penalty * alive
             )
             reward = reward - self.reward_collision_obstacle * reward_collision_obstacle
-            reward_info["reward_collision_obstacle"] = -self.reward_collision_obstacle * reward_collision_obstacle
+            reward_info["reward_collision_obstacle"] = (
+                -self.reward_collision_obstacle * reward_collision_obstacle
+            )
 
         if self.reward_agent_disabled > 0:
             reward_agent_disabled = (1 - alive) * alive_pre
@@ -661,7 +663,7 @@ class GigastepEnv:
         )
         rng = jax.random.split(rng, num_agents)
         obs = v_get_observation(
-            next_states, has_detected, seen, rng, jnp.arange(num_agents)
+            next_states, has_detected, takes_damage > 0, rng, jnp.arange(num_agents)
         )
 
         dones = (1 - alive).astype(jnp.bool_)

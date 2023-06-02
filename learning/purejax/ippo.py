@@ -448,13 +448,14 @@ def make_train(config):
 
 
 if __name__ == "__main__":
-    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
+    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][1]
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
     args = parser.parse_args()
-    BASE_DIR = "./logdir/exp_43" # f"./logdir/all/{args.env_name}" # "./logdir/exp_42"
+    BASE_DIR = f"./logdir/all_with_new_rew_ver3/{args.env_name}" # "./logdir/exp_42"
     ALL_TOTAL_TIMESTEPS = 2e7
     EVAL_EVERY = 2e6
+    EVAL_N_EPS = 4
     resolution = 84
     config = {
         "ENV_CONFIG": {
@@ -467,7 +468,8 @@ if __name__ == "__main__":
             "reward_detection": 0,
             "reward_damage": 0,
             "reward_idle": 0,
-            "reward_collision": 0,
+            "reward_collision_agent": 0,
+            "reward_collision_obstacle": 100,
             "cone_depth": 15.0,
             "cone_angle": jnp.pi * 1.99,
             "enable_waypoints": False,
@@ -489,7 +491,7 @@ if __name__ == "__main__":
         "GAMMA": 0.99,
         "GAE_LAMBDA": 0.95,
         "CLIP_EPS": 0.2,
-        "ENT_COEF": 0.01,
+        "ENT_COEF": 0.05, # 0.01,
         "VF_COEF": 0.5,
         "MAX_GRAD_NORM": 0.1, # 0.5,
         "ACTIVATION": ["relu", "tanh"][1], # "tanh",
@@ -536,8 +538,9 @@ if __name__ == "__main__":
                     orbax_checkpointer.save(filepath, ckpt, save_args=save_args)
 
                 action_fn = partial(action_fn_base, out["runner_state"][0].params)
-                filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}.gif")
-                generate_gif(env_tuple, action_fn, filepath, max_frame_num=config["ENV_CONFIG"]["max_episode_length"])
+                for ii in range(EVAL_N_EPS):
+                    filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}_{ii:02d}.gif")
+                    generate_gif(env_tuple, action_fn, filepath, max_frame_num=config["ENV_CONFIG"]["max_episode_length"], seed=42+ii)
         except KeyboardInterrupt:
             break
 

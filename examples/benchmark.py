@@ -3,15 +3,20 @@ import time
 
 import jax
 import jax.numpy as jnp
+from flax.training import train_state
+
 from gigastep import GigastepEnv
 import time
 import time
+import optax
+from flax import linen as nn
 
 
-def apply_policy(params, obs):
-    x1 = jax.nn.tanh(jnp.dot(obs, params["w1"]) + params["b1"])
-    action = jax.nn.tanh(jnp.dot(x1, params["w2"]) + params["b2"])
-    return action
+def create_train_state(model, rng, in_dim):
+    """Creates initial `TrainState`."""
+    params = model.init(rng, jnp.ones(in_dim))
+    tx = optax.adam(3e-4)
+    return train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
 
 
 def run_vmapped_no_scan(env, params, batch_size, n_steps, repeats=1):
@@ -22,8 +27,12 @@ def run_vmapped_no_scan(env, params, batch_size, n_steps, repeats=1):
         states, obs = env.v_reset(key)
         for i in range(n_steps):
             rng, key = jax.random.split(rng, 2)
-            actions = apply_policy(params, obs)
-            # actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+            if params is None:
+                actions = jnp.zeros(
+                    (batch_size, env.n_agents, env.action_space.shape[0])
+                )
+            else:
+                actions = params.apply_fn(params.params, obs)
             key = jax.random.split(key, batch_size)
             states, obs, r, a, d = env.v_step(states, actions, key)
     obs.block_until_ready()
@@ -34,8 +43,10 @@ def run_vmapped_scan(env, params, batch_size, n_steps, repeats=1):
 
     def policy_step(state_carry, tmp):
         states, obs, rng = state_carry
-        actions = apply_policy(params, obs)
-        # actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+        if params is None:
+            actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+        else:
+            actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
         key = jax.random.split(key, batch_size)
         states, obs, r, a, d = env.v_step(states, actions, key)
@@ -58,8 +69,12 @@ def run_single_no_scan(env, params, n_steps, repeats=1):
         states, obs = env.reset(key)
         for i in range(n_steps):
             rng, key = jax.random.split(rng, 2)
-            actions = apply_policy(params, obs)
-            # actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
+            if params is None:
+                actions = jnp.zeros(
+                    (batch_size, env.n_agents, env.action_space.shape[0])
+                )
+            else:
+                actions = params.apply_fn(params.params, obs)
             states, obs, r, a, d = env.step(states, actions, key)
     obs.block_until_ready()
 
@@ -69,8 +84,10 @@ def run_single_scan(env, params, n_steps, repeats=1):
 
     def policy_step(state_carry, tmp):
         states, obs, rng = state_carry
-        actions = apply_policy(params, obs)
-        # actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
+        if params is None:
+            actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+        else:
+            actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
         states, obs, r, a, d = env.step(states, actions, key)
         carry = [states, obs, rng]
@@ -137,6 +154,56 @@ class GigastepTimer:
         return True
 
 
+class ConvPolicy(nn.Module):
+    num_outputs: int
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.astype(jnp.float32) / 255.0
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), name="conv1")(x)
+        x = nn.relu(x)
+        x = nn.Conv(
+            features=64,
+            kernel_size=(5, 5),
+            strides=(2, 2),
+            name="conv2",
+        )(x)
+        x = nn.relu(x)
+        x = nn.Conv(
+            features=128,
+            kernel_size=(5, 5),
+            strides=(2, 2),
+            name="conv3",
+        )(x)
+        x = nn.relu(x)
+        x = nn.Conv(
+            features=128,
+            kernel_size=(5, 5),
+            strides=(2, 2),
+            name="conv4",
+        )(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # flatten
+        x = nn.Dense(features=128, name="hidden")(x)
+        x = nn.relu(x)
+        x = nn.Dense(features=self.num_outputs, name="logits")(x)
+        return x
+
+
+class MLPPolicy(nn.Module):
+    num_outputs: int
+
+    @nn.compact
+    def __call__(self, x):
+        x = nn.Dense(features=128, name="hidden")(x)
+        x = nn.tanh(x)
+        x = nn.Dense(
+            features=self.num_outputs,
+            name="logits",
+        )(x)
+        return x
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=4096, type=int)  # in minutes
@@ -151,36 +218,32 @@ def main():
     print(
         f"Running with {args.n_agents} agents, {args.n_steps} steps, {args.repeats} repeats, {args.batch_size} batch size, {args.obs_type} obs type"
     )
-    params = {
-        "w1": jax.random.normal(
-            jax.random.PRNGKey(1), shape=(env.observation_space.shape[0], args.hidden)
-        ),
-        "b1": jax.random.normal(jax.random.PRNGKey(2), shape=(args.hidden,)),
-        "w2": jax.random.normal(
-            jax.random.PRNGKey(3), shape=(args.hidden, env.action_space.shape[0])
-        ),
-        "b2": jax.random.normal(
-            jax.random.PRNGKey(4), shape=(env.action_space.shape[0],)
-        ),
-    }
-    # with GigastepTimer(
-    #     "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
-    # ):
-    #     run_single_scan(env, params, args.n_steps, args.repeats)
+    if args.obs_type == "vector":
+        policy = MLPPolicy(num_outputs=env.action_space.shape[0])
+        input_shape = (1, env.observation_space.shape[0])
+    else:
+        policy = ConvPolicy(num_outputs=env.action_space.shape[0])
+        input_shape = (1, 84, 84, 4)
+    nn_state = create_train_state(policy, jax.random.PRNGKey(0), input_shape)
+    nn_state = None
+    with GigastepTimer(
+        "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
+    ):
+        run_single_scan(env, nn_state, args.n_steps, args.repeats)
     with GigastepTimer(
         "single no scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
     ):
-        run_single_no_scan(env, params, args.n_steps, args.repeats)
-    # with GigastepTimer(
-    #     "vmapped scan",
-    #     args.n_steps,
-    #     args.batch_size * args.repeats,
-    #     args.n_agents,
-    #     args.obs_type,
-    # ):
-    #     run_vmapped_scan(
-    #         env, params, args.n_steps * args.repeats, args.batch_size, args.repeats
-    #     )
+        run_single_no_scan(env, nn_state, args.n_steps, args.repeats)
+    with GigastepTimer(
+        "vmapped scan",
+        args.n_steps,
+        args.batch_size * args.repeats,
+        args.n_agents,
+        args.obs_type,
+    ):
+        run_vmapped_scan(
+            env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
+        )
     with GigastepTimer(
         "vmapped no scan",
         args.n_steps,
@@ -189,7 +252,7 @@ def main():
         args.obs_type,
     ):
         run_vmapped_no_scan(
-            env, params, args.n_steps * args.repeats, args.batch_size, args.repeats
+            env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
         )
 
 

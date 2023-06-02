@@ -122,7 +122,8 @@ class GigastepEnv:
         reward_damage=0,
         reward_idle=0,
         reward_agent_disabled=0,
-        reward_collision=0,
+        reward_collision_agent=0,
+        reward_collision_obstacle=0,
         reward_hit_waypoint=0,
         discrete_actions=False,
         obs_type="rgb",
@@ -159,7 +160,8 @@ class GigastepEnv:
         self.reward_damage = reward_damage
         self.reward_idle = reward_idle
         self.reward_agent_disabled = reward_agent_disabled
-        self.reward_collision = reward_collision
+        self.reward_collision_agent = reward_collision_agent
+        self.reward_collision_obstacle = reward_collision_obstacle
         self.reward_hit_waypoint = reward_hit_waypoint
         self.precision = precision
 
@@ -530,7 +532,8 @@ class GigastepEnv:
             "reward_damage": jnp.zeros((num_agents,)),
             "reward_idle": jnp.zeros((num_agents,)),
             "reward_agent_disabled": jnp.zeros((num_agents,)),
-            "reward_collision": jnp.zeros((num_agents,)),
+            "reward_collision_agent": jnp.zeros((num_agents,)),
+            "reward_collision_obstacle": jnp.zeros((num_agents,)),
         }
         ### REWARDS ###
         if self.reward_hit_waypoint > 0:
@@ -594,12 +597,19 @@ class GigastepEnv:
         # Negative reward for collisions, going out of bounds and hitting boxes
         # Negative reward for dying (health drops to 0)
 
-        if self.reward_collision > 0:
-            reward_collision = (
-                collided + out_of_bounds + hit_box * self.collision_penalty * alive
+        if self.reward_collision_agent > 0:
+            reward_collision_agent = (
+                collided
             )
-            reward = reward - self.reward_collision * reward_collision
-            reward_info["reward_collision"] = -self.reward_collision * reward_collision
+            reward = reward - self.reward_collision_agent * reward_collision_agent
+            reward_info["reward_collision_agent"] = -self.reward_collision_agent * reward_collision_agent
+
+        if self.reward_collision_obstacle > 0:
+            reward_collision_obstacle = (
+                out_of_bounds + hit_box * self.collision_penalty * alive
+            )
+            reward = reward - self.reward_collision_obstacle * reward_collision_obstacle
+            reward_info["reward_collision_obstacle"] = -self.reward_collision_obstacle * reward_collision_obstacle
 
         if self.reward_agent_disabled > 0:
             reward_agent_disabled = (1 - alive) * alive_pre
@@ -1111,7 +1121,10 @@ class GigastepEnv:
             agent_state["reward_agent_disabled"] = jnp.zeros(
                 (self.n_agents,), dtype=self.precision
             )
-            agent_state["reward_collision"] = jnp.zeros(
+            agent_state["reward_collision_agent"] = jnp.zeros(
+                (self.n_agents,), dtype=self.precision
+            )
+            agent_state["reward_collision_obstacle"] = jnp.zeros(
                 (self.n_agents,), dtype=self.precision
             )
 

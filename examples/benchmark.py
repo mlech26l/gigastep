@@ -139,7 +139,7 @@ class GigastepTimer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=4096, type=int)  # in minutes
+    parser.add_argument("--batch_size", default=4096 * 16, type=int)  # in minutes
     parser.add_argument("--repeats", default=5, type=int)  # in minutes
     parser.add_argument("--n_agents", default=20, type=int)  # in minutes
     parser.add_argument("--n_steps", default=2000, type=int)  # in minutes
@@ -163,24 +163,24 @@ def main():
             jax.random.PRNGKey(4), shape=(env.action_space.shape[0],)
         ),
     }
-    # with GigastepTimer(
-    #     "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
-    # ):
-    #     run_single_scan(env, params, args.n_steps, args.repeats)
+    with GigastepTimer(
+        "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
+    ):
+        run_single_scan(env, params, args.n_steps, args.repeats)
     with GigastepTimer(
         "single no scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
     ):
         run_single_no_scan(env, params, args.n_steps, args.repeats)
-    # with GigastepTimer(
-    #     "vmapped scan",
-    #     args.n_steps,
-    #     args.batch_size * args.repeats,
-    #     args.n_agents,
-    #     args.obs_type,
-    # ):
-    #     run_vmapped_scan(
-    #         env, params, args.n_steps * args.repeats, args.batch_size, args.repeats
-    #     )
+    with GigastepTimer(
+        "vmapped scan",
+        args.n_steps,
+        args.batch_size * args.repeats,
+        args.n_agents,
+        args.obs_type,
+    ):
+        run_vmapped_scan(
+            env, params, args.n_steps * args.repeats, args.batch_size, args.repeats
+        )
     with GigastepTimer(
         "vmapped no scan",
         args.n_steps,

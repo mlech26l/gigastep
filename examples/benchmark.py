@@ -70,9 +70,7 @@ def run_single_no_scan(env, params, n_steps, repeats=1):
         for i in range(n_steps):
             rng, key = jax.random.split(rng, 2)
             if params is None:
-                actions = jnp.zeros(
-                    (batch_size, env.n_agents, env.action_space.shape[0])
-                )
+                actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
             else:
                 actions = params.apply_fn(params.params, obs)
             states, obs, r, a, d = env.step(states, actions, key)
@@ -85,7 +83,7 @@ def run_single_scan(env, params, n_steps, repeats=1):
     def policy_step(state_carry, tmp):
         states, obs, rng = state_carry
         if params is None:
-            actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
+            actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
         else:
             actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
@@ -234,16 +232,16 @@ def main():
         "single no scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
     ):
         run_single_no_scan(env, nn_state, args.n_steps, args.repeats)
-    with GigastepTimer(
-        "vmapped scan",
-        args.n_steps,
-        args.batch_size * args.repeats,
-        args.n_agents,
-        args.obs_type,
-    ):
-        run_vmapped_scan(
-            env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
-        )
+    # with GigastepTimer(
+    #     "vmapped scan",
+    #     args.n_steps,
+    #     args.batch_size * args.repeats,
+    #     args.n_agents,
+    #     args.obs_type,
+    # ):
+    #     run_vmapped_scan(
+    #         env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
+    #     )
     with GigastepTimer(
         "vmapped no scan",
         args.n_steps,

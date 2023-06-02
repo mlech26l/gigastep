@@ -21,7 +21,7 @@ from gymnax.environments import environment
 from gymnax.wrappers.purerl import GymnaxWrapper
 from typing import Optional, Tuple, Union
 
-from utils import generate_gif
+from utils import generate_gif, get_ep_done
 from network import ActorCriticMLP, ActorCriticLSTM
 
 
@@ -301,17 +301,57 @@ if __name__ == "__main__":
         "ENV_NAME": args.env_name,
         "ANNEAL_LR": False,  # True,
     }
-    rng = jax.random.PRNGKey(30)
+    rng = jax.random.PRNGKey(42)
     env_tuple, make_network = make_not_train(config)
 
     network = make_network()
 
+    # load network params
+    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+    ckpt = orbax_checkpointer.restore(args.ckpt)
+    network_params = ckpt["model"]["params"]
+
+    DETERMINISTIC_ACTION = True
     def action_fn_base(network_params, obs, rng):
         rng, _rng = jax.random.split(rng)
         pi, value = network.apply(network_params, obs)
-        # TODO replace sample with argmax
-        action = pi.sample(seed=_rng)
+        if DETERMINISTIC_ACTION:
+            action = pi.probs.argmax(1)
+        else:
+            action = pi.sample(seed=_rng)
         return action
+    
+    VISUALIZE = False # True
+    if VISUALIZE:
+        from PIL import Image
+        from gigastep import GigastepViewer
+        viewer = GigastepViewer(84 * 4, show_num_agents=0)
+        viewer.set_title("Replay")
+        
+        frame_num = 0
+        frame_list = []
+    
+    env, unwrapped_env = env_tuple
+    rng, _rng = jax.random.split(rng)
+    obs, state = env.reset(_rng)
+    ep_done = False
+    while not ep_done:
+        action = action_fn_base(network_params, obs, rng)
+        rng, _rng = jax.random.split(rng)
+        obs, state, r, done, info = env.step(_rng, state, action)
+        ep_done = get_ep_done(unwrapped_env, done)
+
+        if VISUALIZE:
+            rgb_obs = env.get_global_observation(state.env_state)
+            frame = viewer.draw(unwrapped_env, state.env_state, rgb_obs)
+            frame_list.append(frame)
+            frame_num += 1
+
+    if VISUALIZE:
+        filepath = "./logdir/test.gif"
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        imgs = [Image.fromarray(frame) for frame in frame_list]
+        imgs[0].save(filepath, save_all=True, append_images=imgs[1:], duration=50, loop=0)
 
     # TODO: load checkpoint
     # TODO: Instantiate viewer object

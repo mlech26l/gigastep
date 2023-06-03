@@ -263,6 +263,27 @@ def get_filename(dir):
         file_id += 1
 
 
+def save_npz(filename, params):
+    params = params["params"]
+    team1 = {
+        "w1": params["actor/team1/dense_0"]["kernel"],
+        "b1": params["actor/team1/dense_0"]["bias"],
+        "w2": params["actor/team1/dense_1"]["kernel"],
+        "b2": params["actor/team1/dense_1"]["bias"],
+        "w3": params["actor/team1/last"]["kernel"],
+        "b3": params["actor/team1/last"]["bias"],
+    }
+    team2 = {
+        "w1": params["actor/team2/dense_0"]["kernel"],
+        "b1": params["actor/team2/dense_0"]["bias"],
+        "w2": params["actor/team2/dense_1"]["kernel"],
+        "b2": params["actor/team2/dense_1"]["bias"],
+        "w3": params["actor/team2/last"]["kernel"],
+        "b3": params["actor/team2/last"]["bias"],
+    }
+    np.savez(filename, team1=team1, team2=team2)
+
+
 if __name__ == "__main__":
     ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][1]
     parser = argparse.ArgumentParser()
@@ -325,6 +346,8 @@ if __name__ == "__main__":
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     ckpt = orbax_checkpointer.restore(args.ckpt)
     network_params = ckpt["model"]["params"]
+
+    save_npz("pi1.npz", network_params)
 
     DETERMINISTIC_ACTION = False  # True
 
@@ -420,9 +443,3 @@ if __name__ == "__main__":
             imgs[0].save(
                 filepath, save_all=True, append_images=imgs[1:], duration=50, loop=0
             )
-
-    # TODO: load checkpoint
-    # TODO: Instantiate viewer object
-    # TODO: Replay the policy here but without jit and scan,
-    #  such that we can use the viewer to visualize the policy
-    #  and use the gamepad or controlling an agent manually

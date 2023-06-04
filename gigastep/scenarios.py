@@ -11,10 +11,13 @@ class ScenarioBuilder:
         self._per_agent_thrust = []
         self._map = "all"
         self._map_size = None
+        self._kwargs = {}
+
+    def add_kwarg(self, k, v):
+        self._kwargs[k] = v
 
     def set_map(self, map, map_size=None):
-        if map not in ("all", "empty", "two_rooms1",
-                       "four_rooms", "center_block"):
+        if map not in ("all", "empty", "two_rooms1", "four_rooms", "center_block"):
             raise ValueError(f"Unknown map {map}")
         self._map = map
         if map_size is not None:
@@ -55,6 +58,9 @@ class ScenarioBuilder:
         :return: A GigastepEnv object
         """
         scenario_args = self.get_kwargs()
+        for k, v in self._kwargs.items():
+            scenario_args[k] = v
+
         # Overwrite named args that are passed to make
         for k, v in kwargs.items():
             scenario_args[k] = v
@@ -88,10 +94,33 @@ class ScenarioBuilder:
         map = config.get("map", "all")
         map_size = config.get("map_size", None)
         builder.set_map(map, map_size)
+        kwargs = config.get("kwargs", {})
+        for k, v in kwargs.items():
+            builder.add_kwarg(k, v)
         return builder
 
 
 _builtin_scenarios = {
+    "waypoint_5_vs_5": {
+        "team_0": {"default": 5},
+        "team_1": {"default": 5},
+        "map": "empty",
+        "kwargs": {
+            "damage_cone_depth": 0.0,
+            "episode_ends_one_team_dead": False,
+            "max_episode_length": 500,
+            "enable_waypoints": True,
+            "reward_game_won": 0,
+            "reward_defeat_one_opponent": 0,
+            "reward_detection": 0,
+            "reward_damage": 0,
+            "reward_idle": 0,
+            "reward_agent_disabled": 0,
+            "reward_collision_agent": 0,
+            "reward_collision_obstacle": 0,
+            "reward_hit_waypoint": 50,
+        },
+    },
     "identical_20_vs_20": {
         "team_0": {"default": 20},
         "team_1": {"default": 20},
@@ -226,8 +255,6 @@ _builtin_scenarios = {
     #     "map": "empty",
     #     "map_size": (10000, 10000),
     # },
-
-
 }
 
 

@@ -106,7 +106,7 @@ class GigastepEnv:
         collision_penalty=10,
         limit_x=10,
         limit_y=10,
-        waypoint_size=1,
+        waypoint_size=0.8,
         resolution_x=84,
         resolution_y=84,
         n_agents=10,
@@ -129,6 +129,7 @@ class GigastepEnv:
         obs_type="rgb",
         max_agent_in_vec_obs=15,
         max_episode_length=500,
+        episode_ends_one_team_dead=True,
         jit=True,
         debug_reward=False,
         precision=jnp.float32,
@@ -154,6 +155,7 @@ class GigastepEnv:
         self.enable_waypoints = enable_waypoints
         self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
         self.max_episode_length = max_episode_length
+        self.episode_ends_one_team_dead = episode_ends_one_team_dead
         self.reward_game_won = reward_game_won
         self.reward_defeat_one_opponent = reward_defeat_one_opponent
         self.reward_detection = reward_detection
@@ -385,7 +387,7 @@ class GigastepEnv:
                     new_waypoint_location[1] + self.waypoint_size,
                 ]
             )
-            new_waypoint_time = jax.random.uniform(key1, minval=1, maxval=3)
+            new_waypoint_time = jax.random.uniform(key1, minval=20, maxval=55)
             waypoint_location = (
                 waypoint_appear * new_waypoint_location
                 + (1 - waypoint_appear) * waypoint_location
@@ -518,7 +520,11 @@ class GigastepEnv:
             "aux_rewards_factor": map_state["aux_rewards_factor"],
             "episode_length": map_state["episode_length"] + 1,
         }
-        episode_done = (alive_team1 == 0) | (alive_team2 == 0)
+        # Both teams are dead
+        episode_done = (alive_team1 == 0) & (alive_team2 == 0)
+        if self.episode_ends_one_team_dead:
+            # if episode_ends_one_team_dead is set then episode ends when one team is dead
+            episode_done = episode_done | (alive_team1 == 0) | (alive_team2 == 0)
         if self.max_episode_length is not None:
             # if max_episode_length is not set then episode continues until all agents of one team are dead
             episode_done = episode_done | (
@@ -730,42 +736,30 @@ class GigastepEnv:
             )
 
             if self.enable_waypoints:
-                waypoint_x = jnp.round(
-                    (
-                        (
-                            map_state["waypoint_location"][0]
-                            + map_state["waypoint_location"][2]
-                        )
-                        / 2
-                    )
+                waypoint_num_pixels_x = max(
+                    int(self.waypoint_size * self.resolution[0] / self.limits[0]), 1
+                )
+                waypoint_num_pixels_y = max(
+                    int(self.waypoint_size * self.resolution[1] / self.limits[1]), 1
+                )
+                waypoint_start_x = jnp.round(
+                    map_state["waypoint_location"][0]
                     * self.resolution[0]
                     / self.limits[0]
                 ).astype(jnp.int32)
-                waypoint_y = jnp.round(
-                    (
-                        (
-                            map_state["waypoint_location"][0]
-                            + map_state["waypoint_location"][2]
-                        )
-                        / 2
-                    )
-                    * self.resolution[0]
-                    / self.limits[0]
+                waypoint_start_y = jnp.round(
+                    map_state["waypoint_location"][1]
+                    * self.resolution[1]
+                    / self.limits[1]
                 ).astype(jnp.int32)
-                # Magenta
                 waypoint_color = (
                     (map_state["waypoint_enabled"] > 0) * jnp.array([127, 0, 127])
                 ).astype(jnp.uint8)
-                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y + 1].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x, waypoint_y - 1].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y + 1].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x + 1, waypoint_y - 1].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y + 1].set(waypoint_color)
-                rgb_obs = rgb_obs.at[waypoint_x - 1, waypoint_y - 1].set(waypoint_color)
+                for ix in range(waypoint_num_pixels_x):
+                    for iy in range(waypoint_num_pixels_y):
+                        rgb_obs = rgb_obs.at[
+                            waypoint_start_x + ix, waypoint_start_y + iy
+                        ].set(waypoint_color)
 
             # Health bar is green
             rgb_obs = rgb_obs.at[:, self.resolution[1] - 1, 1].max(255)

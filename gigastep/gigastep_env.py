@@ -106,7 +106,7 @@ class GigastepEnv:
         collision_penalty=10,
         limit_x=10,
         limit_y=10,
-        waypoint_size=0.8,
+        waypoint_size=0.6,
         resolution_x=84,
         resolution_y=84,
         n_agents=10,
@@ -387,7 +387,7 @@ class GigastepEnv:
                     new_waypoint_location[1] + self.waypoint_size,
                 ]
             )
-            new_waypoint_time = jax.random.uniform(key1, minval=20, maxval=55)
+            new_waypoint_time = jax.random.uniform(key1, minval=5, maxval=10)
             waypoint_location = (
                 waypoint_appear * new_waypoint_location
                 + (1 - waypoint_appear) * waypoint_location

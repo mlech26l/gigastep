@@ -285,7 +285,7 @@ def save_npz(filename, params):
 
 
 if __name__ == "__main__":
-    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][1]
+    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
     parser.add_argument("--ckpt", type=str, default="")

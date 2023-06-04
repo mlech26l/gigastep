@@ -124,6 +124,11 @@ _builtin_scenarios = {
         "team_1": {"tank": 1, "sniper": 1, "scout": 1, "boss": 1, "default": 1},
         "map": "empty",
     },
+    "identical_1_vs_1": {
+        "team_0": {"default": 1},
+        "team_1": {"default": 1},
+        "map": "empty",
+    },
     "identical_2_vs_2": {
         "team_0": {"default": 2},
         "team_1": {"default": 2},

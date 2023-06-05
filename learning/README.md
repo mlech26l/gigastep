@@ -53,3 +53,16 @@ $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/anaconda3/envs/gigastep/lib # yo
 
 $ pip install --upgrade dm-haiku # to fix "AttributeError: 'Config' object has no attribute 'jax_experimental_name_stack'"
 ```
+
+### Torch PPO
+#### Installation
+```
+$ pip install pyqt5==5.12.3
+$ pip install ruamel-yaml==0.17.21 gym
+$ pip install  matplotlib
+$ pip install pybullet
+$ pip install stable-baselines3
+$ pip install h5py
+$ pip install torch==1.13.1
+$ pip install wandb
+```

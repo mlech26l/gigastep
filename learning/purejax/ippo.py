@@ -483,8 +483,8 @@ if __name__ == "__main__":
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
     args = parser.parse_args()
     BASE_DIR = f"./logdir/all_with_new_rew_ver3/{args.env_name}"  # "./logdir/exp_42"
-    ALL_TOTAL_TIMESTEPS = 2e7
-    EVAL_EVERY = 2e6
+    ALL_TOTAL_TIMESTEPS = 10e7
+    EVAL_EVERY = 1e7
     EVAL_N_EPS = 4
     resolution = 84
     config = {
@@ -528,7 +528,7 @@ if __name__ == "__main__":
         "ENV_NAME": args.env_name,
         "ANNEAL_LR": False,  # True,
     }
-    rng = jax.random.PRNGKey(30)
+    rng = jax.random.PRNGKey(32)
     train, env_tuple, make_network = make_train(config)
     train_jit = jax.jit(train)
 

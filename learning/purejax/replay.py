@@ -288,7 +288,17 @@ if __name__ == "__main__":
     ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
-    parser.add_argument("--ckpt", type=str, default="")
+    parser.add_argument(
+        "--ckpt",
+        type=str,
+        default=""
+        # default="logdir/all_with_new_rew_ver3/identical_5_vs_5/ckpt/10000000",
+    )
+    parser.add_argument(
+        "--level",
+        type=str,
+        default="1",
+    )
     args = parser.parse_args()
     ALL_TOTAL_TIMESTEPS = 2e7
     EVAL_EVERY = 2e6
@@ -344,10 +354,28 @@ if __name__ == "__main__":
 
     # load network params
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    ckpt = orbax_checkpointer.restore(args.ckpt)
-    network_params = ckpt["model"]["params"]
+    ckpt_name = args.ckpt
+    if ckpt_name == "":
+        ckpt_name = f"pretrained/{args.level}0000000"
+    ckpt = orbax_checkpointer.restore(ckpt_name)
 
-    save_npz("pi1.npz", network_params)
+    network_params = ckpt["model"]["params"]
+    override_params = {
+        "params": {
+            "actor/team1/dense_0": network_params["params"]["actor/team2/dense_0"],
+            "actor/team1/dense_1": network_params["params"]["actor/team2/dense_1"],
+            "actor/team1/last": network_params["params"]["actor/team2/last"],
+            "actor/team2/dense_0": network_params["params"]["actor/team2/dense_0"],
+            "actor/team2/dense_1": network_params["params"]["actor/team2/dense_1"],
+            "actor/team2/last": network_params["params"]["actor/team2/last"],
+        }
+    }
+    for k, v in network_params["params"].items():
+        if k not in override_params["params"]:
+            override_params["params"][k] = v
+    network_params = override_params
+
+    # save_npz("pi1.npz", network_params)
 
     DETERMINISTIC_ACTION = False  # True
 

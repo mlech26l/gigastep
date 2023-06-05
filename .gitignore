@@ -4,6 +4,7 @@ video
 logdir
 .vscode/
 testing/
+learning/evosax/scripts/figures/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

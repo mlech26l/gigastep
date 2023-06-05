@@ -556,7 +556,6 @@ def loop_env_vectorized(env, policy=None, device="cpu", switch_side = False):
             evaluator.total_games_tie / evaluator.total_games]
 
 
-
 def loop_env_vectorized_two_Policy(env, policy_ego = None, policy_opp = None, device="cpu", switch_side = False):
     evaluator = Evaluator(env)
     batch_size = 20
@@ -601,6 +600,96 @@ def loop_env_vectorized_two_Policy(env, policy_ego = None, policy_opp = None, de
         print(str(evaluator))
         # if frame_idx > 400:
         #     sys.exit(1)
+
+    return [evaluator.team_a_wins / evaluator.total_games,
+            evaluator.team_b_wins / evaluator.total_games,
+            evaluator.total_games_tie / evaluator.total_games]
+
+
+
+from evosax import ParameterReshaper
+
+def loop_env_vectorized_evosax(env, network_dict=None, device="cpu", switch_side = False):
+    evaluator = Evaluator(env)
+    batch_size = 20
+    rng = jax.random.PRNGKey(3)
+
+    for opponent in evaluator.policies:
+        print("Opponent", str(opponent))
+        for ep_idx in range(1):
+            ep_done = np.zeros(batch_size, dtype=jnp.bool_)
+            key, rng = jax.random.split(rng, 2)
+            key = jax.random.split(key, batch_size)
+            state, obs = env.v_reset(key)
+            t = 0
+
+            # obs = [rollouts, agents, shape]
+
+            net_ego_carry_init = network_dict["carry"]
+            net_ego_apply = network_dict["apply"]
+            net_ego_params = network_dict["params"]
+
+
+            ego_team_size = jnp.sum(env.teams==0)
+            def rnn_init(obs, rng, ego_policy_params):
+                hidden_ego = net_ego_carry_init(batch_dims=(ego_team_size,))
+                obs_ego = obs[:ego_team_size]
+                hidden_ego, action_ego, _ = net_ego_apply(ego_policy_params, obs_ego, hidden_ego, rng)
+                return hidden_ego, action_ego
+            vmap_rnn_init = jax.vmap(rnn_init, in_axes=(0, 0, 0))
+            def rnn_step(obs, rng, hidden_ego, ego_policy_params):
+                obs_ego = obs[:ego_team_size]
+                hidden_ego, action_ego, _ = net_ego_apply(ego_policy_params, obs_ego, hidden_ego, rng)
+                return hidden_ego, action_ego
+            vmap_rnn_step = jax.vmap(rnn_step, in_axes=(0, 0, 0, 0))
+
+            # param_ego_reshaper = ParameterReshaper(net_ego_params, n_devices=1)
+            # net_ego_params = param_ego_reshaper.reshape(jnp.repeat(x_ego_mean[None], x_ego.shape[0], 0))
+
+            ego_team_size = jnp.sum(env.teams==0)
+            ado_team_size = jnp.sum(env.teams==1)
+
+            hidden_ego = None
+
+            # ego = Torch_Policy(policy=policy, env=env, device=device, vectorize=True)
+
+            while not jnp.all(ep_done):
+                rng, key, key2 = jax.random.split(rng, 3)
+                if network_dict is None:
+                    action_ego = jnp.zeros(
+                        (batch_size, env.n_agents, 3)
+                    )  # ego does nothing
+                else:
+                    # obs_ego = obs[:ego_team_size]
+                    # hidden_ego, action_ego, action_info = net_ego_apply(net_ego_params, obs_ego, hidden_ego, key2)
+                    key = jax.random.split(key, batch_size)
+                    if hidden_ego is None:
+                        hidden_ego, action_ego = vmap_rnn_init(obs, key, net_ego_params)
+                    else:
+                        hidden_ego, action_ego = vmap_rnn_step(obs, key, hidden_ego, net_ego_params)
+
+                key2 = jax.random.split(key2, batch_size)
+                action_opp = opponent.v_apply(obs, key2)
+                if len(action_opp.shape)==1:
+                    action_opp = jnp.repeat(action_opp[..., None], ego_team_size+ado_team_size, axis=-1)
+
+                action_ego_mod = jnp.zeros_like(action_opp)
+                action_ego_mod = action_ego_mod.at[..., :ego_team_size].set(action_ego)
+
+                action = evaluator.v_merge_actions(action_ego_mod, action_opp)
+
+                rng, key = jax.random.split(rng, 2)
+                key = jax.random.split(key, batch_size)
+                state, obs, r, dones, ep_done = env.v_step(state, action, key)
+                evaluator.update_step(r, dones, ep_done)
+
+                time.sleep(SLEEP_TIME)
+                t += 1
+                # print("t", t, "ep_done", ep_done)
+            evaluator.update_episode()
+            print(str(evaluator))
+            # if frame_idx > 400:
+            #     sys.exit(1)
 
     return [evaluator.team_a_wins / evaluator.total_games,
             evaluator.team_b_wins / evaluator.total_games,

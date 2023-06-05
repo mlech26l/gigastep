@@ -1,7 +1,7 @@
 import os
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 # os.environ['JAX_DISABLE_JIT'] = '1'
 
 import jax
@@ -262,10 +262,11 @@ def run_gigastep_fitness(
                         train_team1 = True
                         train_team2 = False
 
-                        update_ado_freq = 10  # 100
-                        extend_ado_freq = 10  # 100
-                        max_ado_params = 10
-                        params_ado_buffer = deque(maxlen=max_ado_params)
+                        update_ado_freq = 50  # 100
+                        extend_ado_freq = 50  # 100
+                        max_old_params = 10
+                        params_ado_buffer = deque(maxlen=max_old_params)
+                        params_ego_buffer = deque(maxlen=max_old_params)
 
                         log_tensorboard = True
 
@@ -275,11 +276,15 @@ def run_gigastep_fitness(
 
                         # if log_tensorboard:
                         from torch.utils.tensorboard import SummaryWriter
-                        logdir = './logdir/evosax/eval/' + s_name.lower() + '/' + scenario_name.lower() + '/' +  subdir_name + '/' + datetime.now().strftime("%y_%m_%d_%H_%M_%S")
+                        logdir = './logdir/evosax/eval/v2/' + s_name.lower() + '/' + scenario_name.lower() + '/' +  subdir_name + '/' + datetime.now().strftime("%y_%m_%d_%H_%M_%S")
                         writer = SummaryWriter(log_dir=logdir, flush_secs=10)
 
-                        with open(logdir + '/cfg.yml', 'w') as outfile:
+                        with open(logdir + '/alg_cfg.yml', 'w') as outfile:
                             yaml.dump(alg_cfg, outfile, default_flow_style=False)
+                        with open(logdir + '/env_cfg.yml', 'w') as outfile:
+                            yaml.dump(env_cfg, outfile, default_flow_style=False)
+                        with open(logdir + '/net_cfg.yml', 'w') as outfile:
+                            yaml.dump(net_cfg, outfile, default_flow_style=False)
 
 
                         rng = jax.random.PRNGKey(0)
@@ -400,22 +405,48 @@ def run_gigastep_fitness(
                                 t.refresh()
                             
                             # Sample parameters for the ego team
-                            x_ego, es_ego_state = strategy_ego.ask(rng_gen_ego, es_ego_state)
-                            x_ego_re = train_param_ego_reshaper.reshape(x_ego)
-
-                            if (gen-1) % update_ado_freq == 0:
+                            if gen==1:
+                                x_ego, es_ego_state = strategy_ego.ask(rng_gen_ego, es_ego_state)
+                                x_ego_re = train_param_ego_reshaper.reshape(x_ego)
                                 x_ado, es_ado_state = strategy_ado.ask(rng_gen_ado, es_ado_state)
                                 x_ado_re = train_param_ado_reshaper.reshape(x_ado)
+                                # Populate buffer
+                                es_ego_state_mean = jax.lax.stop_gradient(es_ego_state.mean)
+                                params_ego_buffer.append(es_ego_state_mean)
+                                es_ado_state_mean = jax.lax.stop_gradient(es_ado_state.mean)
+                                params_ado_buffer.append(es_ado_state_mean)
+                            elif train_team1:
+                                x_ego, es_ego_state = strategy_ego.ask(rng_gen_ego, es_ego_state)
+                                x_ego_re = train_param_ego_reshaper.reshape(x_ego)
+                                if (gen-1) % extend_ado_freq == 0:
+                                    es_ego_state_mean = jax.lax.stop_gradient(es_ego_state.mean)
+                                    params_ego_buffer.append(es_ego_state_mean)
+                                if (gen-1) % update_ado_freq == 0:
+                                    x_ado_mean = random.sample(list(params_ado_buffer), 1)[0]
+                                    x_ado_mean_re = train_param_ado_reshaper.reshape(jnp.repeat(x_ado_mean[None], x_ado.shape[0], 0))
+                                    x_ado_re = x_ado_mean_re
+                            elif train_team2:
+                                x_ado, es_ado_state = strategy_ado.ask(rng_gen_ado, es_ado_state)
+                                x_ado_re = train_param_ado_reshaper.reshape(x_ado)
+                                if (gen-1) % extend_ado_freq == 0:
+                                    es_ado_state_mean = jax.lax.stop_gradient(es_ado_state.mean)
+                                    params_ado_buffer.append(es_ado_state_mean)
+                                if (gen-1) % update_ado_freq == 0:
+                                    x_ego_mean = random.sample(list(params_ego_buffer), 1)[0]
+                                    x_ego_mean_re = train_param_ego_reshaper.reshape(jnp.repeat(x_ego_mean[None], x_ego.shape[0], 0))
+                                    x_ego_re = x_ego_mean_re
+                            else:
+                                return NotImplementedError
 
-                            # Get mean parameters for the ado team
-                            if (gen-1) % extend_ado_freq == 0:
-                                es_ado_state_mean = es_ado_state.mean.copy()
-                                x_ado_mean = jnp.repeat(es_ado_state_mean[None], x_ego.shape[0], 0)  # TODO: check if repeat can be removed
-                                params_ado = x_ado_mean  # train_param_ado_reshaper.reshape(x_ado_mean)
-                                params_ado_buffer.append(params_ado)
-                            if (gen-1) % update_ado_freq == 0:
-                                x_ado_mean = random.sample(list(params_ado_buffer), 1)[0]
-                                x_ado_mean_re = train_param_ado_reshaper.reshape(x_ado_mean)
+                            # # Get mean parameters for the ado team
+                            # if (gen-1) % extend_ado_freq == 0:
+                            #     es_ado_state_mean = es_ado_state.mean.copy()
+                            #     x_ado_mean = jnp.repeat(es_ado_state_mean[None], x_ego.shape[0], 0)  # TODO: check if repeat can be removed
+                            #     params_ado = x_ado_mean  # train_param_ado_reshaper.reshape(x_ado_mean)
+                            #     params_ado_buffer.append(params_ado)
+                            # if (gen-1) % update_ado_freq == 0:
+                            #     x_ado_mean = random.sample(list(params_ado_buffer), 1)[0]
+                            #     x_ado_mean_re = train_param_ado_reshaper.reshape(x_ado_mean)
 
                             # Rollout fitness and update parameter distribution
                             # scores, reward_info = train_evaluator.rollout(rng_eval, x_re, x_mean_re)
@@ -425,15 +456,20 @@ def run_gigastep_fitness(
                             else:
                                 scores_ego, scores_ado, act_info = train_returns
                                 reward_info = None
-                            es_ego_state = strategy_ego.tell(x_ego, scores_ego, es_ego_state)
-                            es_ado_state = strategy_ado.tell(x_ado, scores_ado, es_ado_state)
+                            if train_team1:
+                                es_ego_state = strategy_ego.tell(x_ego, scores_ego, es_ego_state)
+                            elif train_team2:
+                                es_ado_state = strategy_ado.tell(x_ado, scores_ado, es_ado_state)
+                            else:
+                                raise NotImplementedError
 
                             # Update the logging instance.
                             es_ego_log = es_ego_logging.update(es_ego_log, x_ego, scores_ego)
                             es_ado_log = es_ado_logging.update(es_ado_log, x_ado, scores_ado)
 
                             if gen % checkpoint_freq == 0:
-                                es_ego_logging.save(log=es_ego_log, filename=logdir + '/log_iter_' + str(gen))
+                                es_ego_logging.save(log=es_ego_log, filename=logdir + '/ego_log_iter_' + str(gen))
+                                es_ado_logging.save(log=es_ado_log, filename=logdir + '/ado_log_iter_' + str(gen))
 
                             if log_tensorboard:
                                 for key, value in es_ego_log.items():
@@ -754,6 +790,17 @@ if __name__ == "__main__":
     alg_pgpe_cfg0["strategy"] = strategy_cfg
     alg_pgpe_cfg0["params"] = params_cfg
 
+    ### SimpleGA
+    # Base Config
+    alg_simplega_cfg0 = {}
+    alg_simplega_cfg0["strategy_name"] = "SimpleGA"
+    alg_simplega_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_simplega_cfg0["strategy"] = strategy_cfg
+    alg_simplega_cfg0["params"] = params_cfg
+
 
     scenario_names = [
         # "identical_20_vs_20",
@@ -796,13 +843,13 @@ if __name__ == "__main__":
             # alg_des_cfg20,
             # alg_des_cfg21,
             # alg_des_cfg22,
-            alg_des_cfg23,
-            alg_des_cfg24,
-            alg_des_cfg25,
-            alg_des_cfg26,
-            alg_des_cfg27,
-            alg_des_cfg28,
-            alg_des_cfg29,
+            # alg_des_cfg23,
+            # alg_des_cfg24,
+            # alg_des_cfg25,
+            # alg_des_cfg26,
+            # alg_des_cfg27,
+            # alg_des_cfg28,
+            # alg_des_cfg29,
             # alg_openes_cfg0,
             # alg_openes_cfg1,
             # alg_openes_cfg2,
@@ -811,6 +858,7 @@ if __name__ == "__main__":
             # alg_crfmnes_cfg0,
             # alg_pgpe_cfg0,
             # alg_cmaes_cfg0,
+            alg_simplega_cfg0,
         ],
         network_types=["LSTM"],  # "LSTM",
         net_cfgs = [

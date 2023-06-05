@@ -50,20 +50,23 @@ class MLP(nn.Module):
             elif self.hidden_activation == "softplus":
                 x = nn.softplus(x)
 
+        info = {}
+
         if self.output_activation == "identity":
-            return identity_out(x, self.num_output_units, self.kernel_init_type)
+            x = identity_out(x, self.num_output_units, self.kernel_init_type)
         elif self.output_activation == "tanh":
-            return tanh_out(x, self.num_output_units, self.kernel_init_type)
+            x = tanh_out(x, self.num_output_units, self.kernel_init_type)
         # Categorical and gaussian output heads require rng for sampling
         elif self.output_activation == "categorical":
-            return categorical_out(
+            x = categorical_out(
                 rng, x, self.num_output_units, self.kernel_init_type
             )
         elif self.output_activation == "gaussian":
-            return gaussian_out(
+            x = gaussian_out(
                 rng, x, self.num_output_units, self.kernel_init_type
             )
         elif self.output_activation == "tanh_gaussian":
-             return tanh_gaussian_out(
+             x = tanh_gaussian_out(
                 rng, x, self.num_output_units, self.kernel_init_type
             )
+        return x, info

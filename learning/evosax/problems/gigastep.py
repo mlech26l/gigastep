@@ -9,7 +9,7 @@ class GigastepFitness(object):
     def __init__(
         self,
         env_name: str = "identical_20_vs_20",
-        num_env_steps: Optional[int] = 50, # 100,  # None,
+        # num_env_steps: Optional[int] = 100, # 100,  # None,
         num_rollouts: int = 16,
         env_kwargs: dict = {},
         env_params: dict = {},
@@ -17,6 +17,7 @@ class GigastepFitness(object):
         n_devices: Optional[int] = None,
         env_cfg: dict = {},
     ):
+
         self.env_name = env_name
         self.num_rollouts = num_rollouts
         self.test = test
@@ -25,7 +26,7 @@ class GigastepFitness(object):
         # Define the RL environment & replace default parameters if desired
         self.env = gigastep.make_scenario(env_name, **env_cfg)
 
-        self.num_env_steps = num_env_steps
+        self.num_env_steps = env_cfg["max_episode_length"]  # num_env_steps
         self.steps_per_member = self.num_env_steps * num_rollouts
 
         self.ego_team_size = jnp.sum(self.env.teams==0)
@@ -93,16 +94,17 @@ class GigastepFitness(object):
         """Placeholder fn call for rolling out a population for multi-evals."""
         rng_pop = jax.random.split(rng_input, self.num_rollouts)
         out_rollout_map = jax.jit(self.rollout_map)(rng_pop, ego_policy_params, ado_policy_params)
-        scores = out_rollout_map[0]
-        masks = out_rollout_map[1]
+        scores_ego = out_rollout_map[0]
+        scores_ado = out_rollout_map[1]
+        masks = out_rollout_map[2]
         if self.test:
-            images_global = out_rollout_map[2]
+            images_global = out_rollout_map[3]
         # Update total step counter using only transitions before termination of all ego team agents
         self.total_env_steps += masks[..., :self.ego_team_size].sum(axis=-2).max(axis=-1).sum()
         if self.test:
-            out_rollout = scores.mean(axis=-1), images_global
+            out_rollout = scores_ego.mean(axis=-1), scores_ado.mean(axis=-1), images_global
         else:
-            out_rollout = scores.mean(axis=-1),
+            out_rollout = scores_ego.mean(axis=-1), scores_ado.mean(axis=-1),
         if self.debug_reward:
             reward_info = out_rollout_map[-2]
             reward_info = {k: v.mean() for k, v in reward_info.items()}
@@ -122,7 +124,7 @@ class GigastepFitness(object):
 
         def policy_step(state_input, tmp):
             """lax.scan compatible step transition in jax env."""
-            obs, state, ego_policy_params, ado_policy_params, rng, cum_reward, valid_mask = state_input
+            obs, state, ego_policy_params, ado_policy_params, rng, cum_reward_ego, cum_reward_ado, valid_mask = state_input
             rng, rng_step, rng_net = jax.random.split(rng, 3)
 
             obs_ego = obs[:self.ego_team_size]
@@ -139,7 +141,8 @@ class GigastepFitness(object):
             next_o_global = self.env.get_global_observation(next_s)
 
             # reward = reward[..., :self.ego_team_size].mean(axis=-1)  # FIXME: mean over all agent reward [testing, not desired]
-            new_cum_reward = cum_reward + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
+            new_cum_reward_ego = cum_reward_ego + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
+            new_cum_reward_ado = cum_reward_ado + (reward * valid_mask)[..., self.ego_team_size:].mean(axis=-1)
             new_valid_mask = valid_mask * (1 - dones)
             carry = [
                 next_o.squeeze(),
@@ -147,7 +150,8 @@ class GigastepFitness(object):
                 ego_policy_params,
                 ado_policy_params,
                 rng,
-                new_cum_reward,
+                new_cum_reward_ego,
+                new_cum_reward_ado,
                 new_valid_mask,
             ]
             if self.test:
@@ -170,6 +174,7 @@ class GigastepFitness(object):
                 ado_policy_params,
                 rng_episode,
                 jnp.array([0.0]),
+                jnp.array([0.0]),
                 jnp.ones((obs.shape[0],)),
             ],
             (),
@@ -188,8 +193,9 @@ class GigastepFitness(object):
             out_scan = (*out_scan, reward_info)
         act_info = {k: v.mean(axis=(0, 1)) for k, v in scan_out[-1].items()}
         out_scan = (*out_scan, act_info)
-        cum_return = carry_out[-2].squeeze()
-        return cum_return, *out_scan
+        cum_return_ego = carry_out[-3].squeeze()
+        cum_return_ado = carry_out[-2].squeeze()
+        return cum_return_ego, cum_return_ado, *out_scan
 
     def rollout_rnn(
         self, rng_input: chex.PRNGKey, ego_policy_params: chex.ArrayTree, ado_policy_params: chex.ArrayTree
@@ -212,7 +218,8 @@ class GigastepFitness(object):
                 rng,
                 hidden_ego,
                 hidden_ado,
-                cum_reward,
+                cum_reward_ego,
+                cum_reward_ado,
                 valid_mask,
             ) = state_input
             rng, rng_step, rng_net = jax.random.split(rng, 3)
@@ -230,7 +237,8 @@ class GigastepFitness(object):
 
             next_o_global = self.env.get_global_observation(next_s)
 
-            new_cum_reward = cum_reward + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
+            new_cum_reward_ego = cum_reward_ego + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
+            new_cum_reward_ado = cum_reward_ado + (reward * valid_mask)[..., self.ego_team_size:].mean(axis=-1)
             new_valid_mask = valid_mask * (1 - dones)
             carry = [
                 next_o.squeeze(),
@@ -240,7 +248,8 @@ class GigastepFitness(object):
                 rng,
                 hidden_ego,
                 hidden_ado,
-                new_cum_reward,
+                new_cum_reward_ego,
+                new_cum_reward_ado,
                 new_valid_mask,
             ]
             if self.test:
@@ -265,6 +274,7 @@ class GigastepFitness(object):
                 hidden_ego,
                 hidden_ado,
                 jnp.array([0.0]),
+                jnp.array([0.0]),
                 jnp.ones((obs.shape[0],)),
             ],
             (),
@@ -283,5 +293,6 @@ class GigastepFitness(object):
             out_scan = (*out_scan, reward_info)
         act_info = {k: v.mean(axis=(0, 1)) for k, v in scan_out[-1].items()}
         out_scan = (*out_scan, act_info)
-        cum_return = carry_out[-2].squeeze()
-        return cum_return, *out_scan
+        cum_return_ego = carry_out[-3].squeeze()
+        cum_return_ado = carry_out[-2].squeeze()
+        return cum_return_ego, cum_return_ado, *out_scan

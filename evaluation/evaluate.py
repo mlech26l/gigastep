@@ -79,6 +79,15 @@ if __name__ == "__main__":
             "log": "Simultaneouslyselfplay-05/23/23-171518.373156"
         }
     }
+
+    trained_agent_dict = {
+        "identical_5_vs_5": {
+            "discrete_actions": True,
+            "obs_type": "vector",
+            "path": "trained_models/ppogigastepgiga20230523-173609.588417.pt",
+            "log": "Simultaneouslyselfplay-05/23/23-162638.720489"
+        },
+    }
     
     for env_name, load_config in trained_agent_dict.items():
 
@@ -103,6 +112,7 @@ if __name__ == "__main__":
         env_cfg.resolution_x = 84
         env_cfg.resolution_y = 84
         env_cfg.discrete_actions = True
+
         env_cfg.obs_type = load_config["obs_type"]
 
         ## create env

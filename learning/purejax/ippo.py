@@ -55,7 +55,7 @@ class GigaStepWrapper(GymnaxWrapper):
         )
         obs = jax.lax.select(episode_done, obs_re, obs_st)
 
-        return obs, state, reward, done, {} # replace last argument with empty info
+        return obs, state, reward, done, {}  # replace last argument with empty info
 
 
 # HACK
@@ -81,7 +81,7 @@ class GigaStepTupleObsWrapper(GigaStepWrapper):
             jax.lax.select(episode_done, obs_re[1], obs_st[1]),
         )
 
-        return obs, state, reward, done, {} # replace last argument with empty info
+        return obs, state, reward, done, {}  # replace last argument with empty info
 
 
 # TODO: seems inefficient
@@ -104,7 +104,7 @@ class FrameStackWrapper(GymnaxWrapper):
         state[0]["stacked_obs"] = [obs] * self.n_frames
         obs = self._get_stacked_obs(obs, state)
         return obs, state
-    
+
     @partial(jax.jit, static_argnums=(0,))
     def step(
         self,
@@ -115,11 +115,13 @@ class FrameStackWrapper(GymnaxWrapper):
     ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
         stacked_obs = state[0]["stacked_obs"]
         obs, state, reward, done, _ = self._env.step(
-            key, state, action,
+            key,
+            state,
+            action,
         )
         state[0]["stacked_obs"] = stacked_obs
         obs = self._get_stacked_obs(obs, state)
-        return obs, state, reward, done, {} # replace last argument with empty info
+        return obs, state, reward, done, {}  # replace last argument with empty info
 
 
 class ImageObsWrapper(GymnaxWrapper):
@@ -142,7 +144,7 @@ class ImageObsWrapper(GymnaxWrapper):
         obs, state, reward, done, info = self._env.step(key, state, action)
         obs = self._process_obs(obs)
         return obs, state, reward, done, info
-    
+
     def _process_obs(self, obs):
         return obs.reshape(obs.shape[0], -1)
 
@@ -230,9 +232,14 @@ def make_train(config):
     env = LogMultiAgentWrapper(env)
 
     if config["NETWORK_TYPE"] == "mlp":
-        make_network = partial(ActorCriticMLP, unwrapped_env.action_space.n, activation=config["ACTIVATION"],
-                               teams=unwrapped_env.teams, has_cnn=config["ENV_CONFIG"]["obs_type"]=="rgb" and config["USE_CNN"],
-                               obs_shape=unwrapped_env.observation_space.shape)
+        make_network = partial(
+            ActorCriticMLP,
+            unwrapped_env.action_space.n,
+            activation=config["ACTIVATION"],
+            teams=unwrapped_env.teams,
+            has_cnn=config["ENV_CONFIG"]["obs_type"] == "rgb" and config["USE_CNN"],
+            obs_shape=unwrapped_env.observation_space.shape,
+        )
     elif config["NETWORK_TYPE"] == "lstm":
         # make_network = partial(ActorCriticLSTM, 128, unwrapped_env.action_space.n)
         raise NotImplementedError
@@ -240,23 +247,41 @@ def make_train(config):
         raise ValueError("Unrecognized network type " + config["NETWORK_TYPE"])
 
     def linear_schedule(count):
-        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
+        frac = (
+            1.0
+            - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"]))
+            / config["NUM_UPDATES"]
+        )
         return config["LR"] * frac
 
     def train(rng, train_state=None, env_state=None, obsv=None, net_state=None):
-
         network = make_network()
 
         if train_state is None:
             # INIT NETWORK
             rng, _rng = jax.random.split(rng)
             if config["FRAME_STACK_N"] > 1:
-                init_x = jnp.zeros((unwrapped_env.n_agents,) + unwrapped_env.observation_space.shape[:-1] + (unwrapped_env.observation_space.shape[-1] * config["FRAME_STACK_N"],))
+                init_x = jnp.zeros(
+                    (unwrapped_env.n_agents,)
+                    + unwrapped_env.observation_space.shape[:-1]
+                    + (
+                        unwrapped_env.observation_space.shape[-1]
+                        * config["FRAME_STACK_N"],
+                    )
+                )
             else:
-                if (config["ENV_CONFIG"]["obs_type"] == "rgb") and not config["USE_CNN"]: # HACK
-                    init_x = jnp.zeros((unwrapped_env.n_agents,) + (np.prod(unwrapped_env.observation_space.shape),))
+                if (config["ENV_CONFIG"]["obs_type"] == "rgb") and not config[
+                    "USE_CNN"
+                ]:  # HACK
+                    init_x = jnp.zeros(
+                        (unwrapped_env.n_agents,)
+                        + (np.prod(unwrapped_env.observation_space.shape),)
+                    )
                 else:
-                    init_x = jnp.zeros((unwrapped_env.n_agents,) + unwrapped_env.observation_space.shape)
+                    init_x = jnp.zeros(
+                        (unwrapped_env.n_agents,)
+                        + unwrapped_env.observation_space.shape
+                    )
             network_params = network.init(_rng, init_x)
             if config["ANNEAL_LR"]:
                 tx = optax.chain(
@@ -264,7 +289,10 @@ def make_train(config):
                     optax.adam(learning_rate=linear_schedule, eps=1e-5),
                 )
             else:
-                tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR"], eps=1e-5))
+                tx = optax.chain(
+                    optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+                    optax.adam(config["LR"], eps=1e-5),
+                )
             train_state = TrainState.create(
                 apply_fn=network.apply,
                 params=network_params,
@@ -292,8 +320,8 @@ def make_train(config):
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
                 if config["NETWORK_TYPE"] == "lstm":
-                    pi, value = network.apply(train_state.params, last_obs) # DEBUG
-                else: # mlp
+                    pi, value = network.apply(train_state.params, last_obs)  # DEBUG
+                else:  # mlp
                     pi, value = network.apply(train_state.params, last_obs)
                 action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(action)
@@ -302,11 +330,13 @@ def make_train(config):
                 rng, _rng = jax.random.split(rng)
                 rng_step = jax.random.split(_rng, config["NUM_ENVS"])
                 # env_state, obsv, reward, done, ep_done = env.v_step(env_state, action, rng_step)
-                obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0,0,0,None))(
-                    rng_step, env_state, action, None
-                )
+                obsv, env_state, reward, done, info = jax.vmap(
+                    env.step, in_axes=(0, 0, 0, None)
+                )(rng_step, env_state, action, None)
                 if config["NETWORK_TYPE"] == "lstm":
-                    import ipdb; ipdb.set_trace() # TODO: reset rnn state
+                    import ipdb
+
+                    ipdb.set_trace()  # TODO: reset rnn state
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info
                 )
@@ -439,7 +469,7 @@ def make_train(config):
 
         rng, _rng = jax.random.split(rng)
         runner_state = (train_state, env_state, obsv, net_state, _rng)
-        runner_state, metric  = jax.lax.scan(
+        runner_state, metric = jax.lax.scan(
             _update_step, runner_state, None, config["NUM_UPDATES"]
         )
         return {"runner_state": runner_state, "metrics": metric}
@@ -448,20 +478,20 @@ def make_train(config):
 
 
 if __name__ == "__main__":
-    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][1]
+    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
     args = parser.parse_args()
-    BASE_DIR = f"./logdir/all_with_new_rew_ver3/{args.env_name}" # "./logdir/exp_42"
-    ALL_TOTAL_TIMESTEPS = 2e7
-    EVAL_EVERY = 2e6
+    BASE_DIR = f"./logdir/all_with_new_rew_ver3/{args.env_name}"  # "./logdir/exp_42"
+    ALL_TOTAL_TIMESTEPS = 10e7
+    EVAL_EVERY = 1e7
     EVAL_N_EPS = 4
     resolution = 84
     config = {
         "ENV_CONFIG": {
             "resolution_x": resolution,
             "resolution_y": resolution,
-            "obs_type": "vector", # "rgb", # "vector",
+            "obs_type": "vector",  # "rgb", # "vector",
             "discrete_actions": True,
             "reward_game_won": 100,
             "reward_defeat_one_opponent": 100,
@@ -476,7 +506,7 @@ if __name__ == "__main__":
             "use_stochastic_obs": False,
             "use_stochastic_comm": False,
             "max_agent_in_vec_obs": 100,
-            "max_episode_length": 256, # 1024,
+            "max_episode_length": 256,  # 1024,
         },
         "NETWORK_TYPE": ["mlp", "lstm"][0],
         "USE_CNN": False,
@@ -484,26 +514,27 @@ if __name__ == "__main__":
         "LR": 4e-4,
         # each epoch has batch (experience replay buffer) size as num_envs * num_steps
         "NUM_ENVS": 64,
-        "NUM_STEPS": 256, # 1024, # 256,
-        "TOTAL_TIMESTEPS": 1e5, # 1e5, # for one train_jit only
+        "NUM_STEPS": 256,  # 1024, # 256,
+        "TOTAL_TIMESTEPS": 1e5,  # 1e5, # for one train_jit only
         "UPDATE_EPOCHS": 4,
-        "NUM_MINIBATCHES": 32, # 4, # determine minibatch_size as buffer_size / num_minibatches; also num of minibatch size within an epoch
+        "NUM_MINIBATCHES": 32,  # 4, # determine minibatch_size as buffer_size / num_minibatches; also num of minibatch size within an epoch
         "GAMMA": 0.99,
         "GAE_LAMBDA": 0.95,
         "CLIP_EPS": 0.2,
-        "ENT_COEF": 0.05, # 0.01,
+        "ENT_COEF": 0.05,  # 0.01,
         "VF_COEF": 0.5,
-        "MAX_GRAD_NORM": 0.1, # 0.5,
-        "ACTIVATION": ["relu", "tanh"][1], # "tanh",
+        "MAX_GRAD_NORM": 0.1,  # 0.5,
+        "ACTIVATION": ["relu", "tanh"][1],  # "tanh",
         "ENV_NAME": args.env_name,
-        "ANNEAL_LR": False, # True,
+        "ANNEAL_LR": False,  # True,
     }
-    rng = jax.random.PRNGKey(30)
+    rng = jax.random.PRNGKey(32)
     train, env_tuple, make_network = make_train(config)
     train_jit = jax.jit(train)
 
     if EVAL_EVERY > 0:
         network = make_network()
+
         def action_fn_base(network_params, obs, rng):
             rng, _rng = jax.random.split(rng)
             pi, value = network.apply(network_params, obs)
@@ -523,7 +554,9 @@ if __name__ == "__main__":
                 out = train_jit(rng, train_state, env_state, obsv, net_state)
             toc = time.time()
 
-            ep_ret_i = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1).tolist()
+            ep_ret_i = (
+                out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1).tolist()
+            )
             ep_ret_list.extend(ep_ret_i)
 
             pbar.set_description(f"[{i}/{ALL_TOTAL_TIMESTEPS}] {toc-tic}")
@@ -531,7 +564,7 @@ if __name__ == "__main__":
             current_ts = i + int(config["TOTAL_TIMESTEPS"])
             if (EVAL_EVERY > 0) and ((i == 0) or (current_ts % EVAL_EVERY == 0)):
                 if i != 0:
-                    ckpt = {'model': train_state, 'config': config}
+                    ckpt = {"model": train_state, "config": config}
                     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
                     save_args = orbax_utils.save_args_from_target(ckpt)
                     filepath = os.path.join(BASE_DIR, "ckpt", f"{current_ts:07d}")
@@ -539,8 +572,16 @@ if __name__ == "__main__":
 
                 action_fn = partial(action_fn_base, out["runner_state"][0].params)
                 for ii in range(EVAL_N_EPS):
-                    filepath = os.path.join(BASE_DIR, "video", f"{current_ts:07d}_{ii:02d}.gif")
-                    generate_gif(env_tuple, action_fn, filepath, max_frame_num=config["ENV_CONFIG"]["max_episode_length"], seed=42+ii)
+                    filepath = os.path.join(
+                        BASE_DIR, "video", f"{current_ts:07d}_{ii:02d}.gif"
+                    )
+                    generate_gif(
+                        env_tuple,
+                        action_fn,
+                        filepath,
+                        max_frame_num=config["ENV_CONFIG"]["max_episode_length"],
+                        seed=42 + ii,
+                    )
         except KeyboardInterrupt:
             break
 
@@ -552,4 +593,10 @@ if __name__ == "__main__":
     for eval_i in range(8):
         action_fn = partial(action_fn_base, out["runner_state"][0].params)
         filepath = os.path.join(BASE_DIR, "video", f"eval_{eval_i:02d}.gif")
-        generate_gif(env_tuple, action_fn, filepath, seed=eval_i, max_frame_num=config["ENV_CONFIG"]["max_episode_length"])
+        generate_gif(
+            env_tuple,
+            action_fn,
+            filepath,
+            seed=eval_i,
+            max_frame_num=config["ENV_CONFIG"]["max_episode_length"],
+        )

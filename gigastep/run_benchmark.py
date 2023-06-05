@@ -16,7 +16,9 @@ def create_train_state(model, rng, in_dim):
     """Creates initial `TrainState`."""
     params = model.init(rng, jnp.ones(in_dim))
     tx = optax.adam(3e-4)
-    return train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
+    return train_state.TrainState.create(
+        apply_fn=jax.jit(model.apply), params=params, tx=tx
+    )
 
 
 def run_vmapped_no_scan(env, params, batch_size, n_steps, repeats=1):
@@ -100,7 +102,7 @@ def run_single_scan(env, params, n_steps, repeats=1):
     scan_out[1].block_until_ready()
 
 
-def print_step_per_second(step_per_second):
+def to_human_readable(step_per_second):
     postfix = ""
     orig_step_per_second = step_per_second
     if step_per_second > 1e9:
@@ -112,44 +114,20 @@ def print_step_per_second(step_per_second):
     elif step_per_second > 1e3:
         postfix = "k"
         step_per_second = step_per_second / 1e3
-    print(f"{step_per_second:0.1f}{postfix} steps per second", end=" ")
+    if step_per_second > 100:
+        step_per_second_str = f"{step_per_second:0.0f}{postfix}"
+    else:
+        step_per_second_str = f"{step_per_second:0.1f}{postfix}"
     sec_to_100M = 100_000_000 / orig_step_per_second
-    if sec_to_100M >= 60 * 60:
+    if sec_to_100M >= 120 * 60:  # 120 minutes
         hours = sec_to_100M / 60 / 60
-        mins = (hours - int(hours)) * 60
-        print(f" (time to 100M steps: {int(hours)} hours {mins:0.0f} minutes)", end="")
+        time_to_100m = f"{int(round(hours))} hours"
     elif sec_to_100M >= 60:
         mins = sec_to_100M / 60
-        secs = (mins - int(mins)) * 60
-        print(f" (time to 100M steps: {int(mins)} minutes {secs:0.0f} seconds)", end="")
+        time_to_100m = f"{int(round(mins))} minutes"
     else:
-        print(f" (time to 100M steps: {sec_to_100M:0.1f} seconds)", end="")
-    print()
-
-
-class GigastepTimer:
-    def __init__(self, name, n_steps, batch_size, n_agents, obs_type):
-        # example file or database connection
-        self.name = name
-        self.n_steps = n_steps
-        self.batch_size = batch_size
-        self.n_agents = n_agents
-        self.obs_type = obs_type
-
-        self.start_time = None
-
-    def __enter__(self):
-        self.start_time = time.time()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        elapsed = time.time() - self.start_time
-        num_agent_steps = self.n_steps * self.batch_size * self.n_agents
-        step_per_second = num_agent_steps / elapsed
-        print(f"{self.name}:", end=" ")
-        print_step_per_second(step_per_second)
-
-        return True
+        time_to_100m = f"{sec_to_100M:0.1f} seconds"
+    return step_per_second_str, time_to_100m
 
 
 class ConvPolicy(nn.Module):
@@ -157,6 +135,11 @@ class ConvPolicy(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        batch_size = x.shape[0]
+        five_dims = False
+        if len(x.shape) == 5:
+            five_dims = True
+            x = jnp.reshape(x, (-1, *x.shape[-3:]))
         x = x.astype(jnp.float32) / 255.0
         x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), name="conv1")(x)
         x = nn.relu(x)
@@ -181,10 +164,20 @@ class ConvPolicy(nn.Module):
             name="conv4",
         )(x)
         x = nn.relu(x)
-        x = x.reshape((x.shape[0], -1))  # flatten
+        x = nn.Conv(
+            features=256,
+            kernel_size=(5, 5),
+            strides=(2, 2),
+            name="conv5",
+        )(x)
+        x = nn.relu(x)
+        # global average pooling
+        x = jnp.mean(x, axis=(1, 2))
         x = nn.Dense(features=128, name="hidden")(x)
         x = nn.relu(x)
         x = nn.Dense(features=self.num_outputs, name="logits")(x)
+        if five_dims:
+            x = jnp.reshape(x, (batch_size, -1, self.num_outputs))
         return x
 
 
@@ -203,55 +196,60 @@ class MLPPolicy(nn.Module):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=4096, type=int)  # in minutes
-    parser.add_argument("--repeats", default=5, type=int)  # in minutes
-    parser.add_argument("--n_agents", default=20, type=int)  # in minutes
-    parser.add_argument("--n_steps", default=2000, type=int)  # in minutes
-    parser.add_argument("--hidden", default=128, type=int)  # in minutes
-    parser.add_argument("--obs_type", default="vector")  # in minutes
-    args = parser.parse_args()
-    env = GigastepEnv(n_agents=args.n_agents, obs_type=args.obs_type)
+    BATCH_SIZES = [1, 8, 32, 128, 512, 2048, 8192]
 
-    print(
-        f"Running with {args.n_agents} agents, {args.n_steps} steps, {args.repeats} repeats, {args.batch_size} batch size, {args.obs_type} obs type"
-    )
-    if args.obs_type == "vector":
-        policy = MLPPolicy(num_outputs=env.action_space.shape[0])
-        input_shape = (1, env.observation_space.shape[0])
-    else:
-        policy = ConvPolicy(num_outputs=env.action_space.shape[0])
-        input_shape = (1, 84, 84, 4)
-    nn_state = create_train_state(policy, jax.random.PRNGKey(0), input_shape)
-    nn_state = None
-    with GigastepTimer(
-        "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
-    ):
-        run_single_scan(env, nn_state, args.n_steps, args.repeats)
-    with GigastepTimer(
-        "single no scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
-    ):
-        run_single_no_scan(env, nn_state, args.n_steps, args.repeats)
-    # with GigastepTimer(
-    #     "vmapped scan",
-    #     args.n_steps,
-    #     args.batch_size * args.repeats,
-    #     args.n_agents,
-    #     args.obs_type,
-    # ):
-    #     run_vmapped_scan(
-    #         env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
-    #     )
-    with GigastepTimer(
-        "vmapped no scan",
-        args.n_steps,
-        args.batch_size * args.repeats,
-        args.n_agents,
-        args.obs_type,
-    ):
-        run_vmapped_no_scan(
-            env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--format", default="latex", type=str, help="Output format")
+    parser.add_argument("--no_policy", action="store_true", help="Don't run policy")
+    args = parser.parse_args()
+
+    latex_format = args.format == "latex"
+    if latex_format:
+        print("\\begin{tabular}{lc|cccc}\\toprule")
+        print(
+            "Device & Batch size & \\multicolumn{2}{c}{Vector} & \\multicolumn{2}{c}{RGB} \\\\"
         )
+        print("& & steps/s & Time to 100M & steps/s & Time to 100M \\\\\\midrule")
+    for batch_size in BATCH_SIZES:
+        if latex_format:
+            print(f" DEVICE &  {batch_size}", end="")
+        for obs_type in ["vector", "rgb"]:
+            env = GigastepEnv(n_agents=4, obs_type=obs_type)
+            if obs_type == "vector":
+                policy = MLPPolicy(num_outputs=env.action_space.shape[0])
+                input_shape = (1, env.observation_space.shape[0])
+            else:
+                policy = ConvPolicy(num_outputs=env.action_space.shape[0])
+                input_shape = (1, 84, 84, 3)
+            nn_state = create_train_state(policy, jax.random.PRNGKey(0), input_shape)
+            if args.no_policy:
+                nn_state = None
+
+            start_time = time.time()
+            if batch_size == 1:
+                run_single_no_scan(env, nn_state, n_steps=2000, repeats=5)
+            else:
+                run_vmapped_no_scan(
+                    env, nn_state, n_steps=2000, repeats=5, batch_size=batch_size
+                )
+            elapsed = time.time() - start_time
+            num_agent_steps = 2000 * batch_size * 4 * 5
+            step_per_second = num_agent_steps / elapsed
+            step_per_second_str, time_to_100m = to_human_readable(step_per_second)
+
+            if latex_format:
+                print(f" & {step_per_second_str} & {time_to_100m} ", end="")
+
+            if not latex_format:
+                print(
+                    f"{batch_size} {obs_type} steps/s: {step_per_second_str} time to 100M: {time_to_100m}"
+                )
+        if latex_format:
+            print(" \\\\")
+
+    if latex_format:
+        print("\\bottomrule")
+        print("\\end{tabular}")
 
 
 if __name__ == "__main__":

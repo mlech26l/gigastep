@@ -53,7 +53,12 @@ class GigaStepWrapper(GymnaxWrapper):
         state = jax.tree_map(
             lambda x, y: jax.lax.select(episode_done, x, y), state_re, state_st
         )
-        obs = jax.lax.select(episode_done, obs_re, obs_st)
+        if isinstance(obs_re, tuple):
+            obs = jax.tree_map(
+                lambda x, y: jax.lax.select(episode_done, x, y), obs_re, obs_st
+            )
+        else:
+            obs = jax.lax.select(episode_done, obs_re, obs_st)
 
         return obs, state, reward, done, {}  # replace last argument with empty info
 
@@ -238,7 +243,7 @@ def make_not_train(config):
             activation=config["ACTIVATION"],
             teams=unwrapped_env.teams,
             has_cnn=config["ENV_CONFIG"]["obs_type"] == "rgb" and config["USE_CNN"],
-            obs_shape=unwrapped_env.observation_space.shape,
+            obs_shape=unwrapped_env.observation_space[1].shape,
         )
     elif config["NETWORK_TYPE"] == "lstm":
         # make_network = partial(ActorCriticLSTM, 128, unwrapped_env.action_space.n)
@@ -249,11 +254,51 @@ def make_not_train(config):
     return (env, unwrapped_env), make_network
 
 
+def get_filename(dir):
+    file_id = 0
+    while True:
+        filename = os.path.join(dir, f"ep_{file_id:06d}.npz")
+        if not os.path.exists(filename):
+            return filename
+        file_id += 1
+
+
+def save_npz(filename, params):
+    params = params["params"]
+    team1 = {
+        "w1": params["actor/team1/dense_0"]["kernel"],
+        "b1": params["actor/team1/dense_0"]["bias"],
+        "w2": params["actor/team1/dense_1"]["kernel"],
+        "b2": params["actor/team1/dense_1"]["bias"],
+        "w3": params["actor/team1/last"]["kernel"],
+        "b3": params["actor/team1/last"]["bias"],
+    }
+    team2 = {
+        "w1": params["actor/team2/dense_0"]["kernel"],
+        "b1": params["actor/team2/dense_0"]["bias"],
+        "w2": params["actor/team2/dense_1"]["kernel"],
+        "b2": params["actor/team2/dense_1"]["bias"],
+        "w3": params["actor/team2/last"]["kernel"],
+        "b3": params["actor/team2/last"]["bias"],
+    }
+    np.savez(filename, team1=team1, team2=team2)
+
+
 if __name__ == "__main__":
-    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][1]
+    ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
-    parser.add_argument("--ckpt", type=str, default="")
+    parser.add_argument(
+        "--ckpt",
+        type=str,
+        default=""
+        # default="logdir/all_with_new_rew_ver3/identical_5_vs_5/ckpt/10000000",
+    )
+    parser.add_argument(
+        "--level",
+        type=str,
+        default="1",
+    )
     args = parser.parse_args()
     ALL_TOTAL_TIMESTEPS = 2e7
     EVAL_EVERY = 2e6
@@ -263,7 +308,7 @@ if __name__ == "__main__":
         "ENV_CONFIG": {
             "resolution_x": resolution,
             "resolution_y": resolution,
-            "obs_type": "vector",  # "rgb", # "vector",
+            "obs_type": "rgb_vector",  # "rgb", # "vector",
             "discrete_actions": True,
             "reward_game_won": 100,
             "reward_defeat_one_opponent": 100,
@@ -301,6 +346,7 @@ if __name__ == "__main__":
         "ENV_NAME": args.env_name,
         "ANNEAL_LR": False,  # True,
     }
+    # python3 replay.py --env-name identical_5_vs_5 --ckpt logdir/all_with_new_rew_ver3/identical_5_vs_5/ckpt/20000000/
     rng = jax.random.PRNGKey(42)
     env_tuple, make_network = make_not_train(config)
 
@@ -308,10 +354,31 @@ if __name__ == "__main__":
 
     # load network params
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    ckpt = orbax_checkpointer.restore(args.ckpt)
-    network_params = ckpt["model"]["params"]
+    ckpt_name = args.ckpt
+    if ckpt_name == "":
+        ckpt_name = f"pretrained/{args.level}0000000"
+    ckpt = orbax_checkpointer.restore(ckpt_name)
 
-    DETERMINISTIC_ACTION = True
+    network_params = ckpt["model"]["params"]
+    override_params = {
+        "params": {
+            "actor/team1/dense_0": network_params["params"]["actor/team2/dense_0"],
+            "actor/team1/dense_1": network_params["params"]["actor/team2/dense_1"],
+            "actor/team1/last": network_params["params"]["actor/team2/last"],
+            "actor/team2/dense_0": network_params["params"]["actor/team2/dense_0"],
+            "actor/team2/dense_1": network_params["params"]["actor/team2/dense_1"],
+            "actor/team2/last": network_params["params"]["actor/team2/last"],
+        }
+    }
+    for k, v in network_params["params"].items():
+        if k not in override_params["params"]:
+            override_params["params"][k] = v
+    network_params = override_params
+
+    # save_npz("pi1.npz", network_params)
+
+    DETERMINISTIC_ACTION = False  # True
+
     def action_fn_base(network_params, obs, rng):
         rng, _rng = jax.random.split(rng)
         pi, value = network.apply(network_params, obs)
@@ -320,41 +387,87 @@ if __name__ == "__main__":
         else:
             action = pi.sample(seed=_rng)
         return action
-    
-    VISUALIZE = False # True
-    if VISUALIZE:
+
+    from gigastep import GigastepViewer
+
+    viewer = GigastepViewer(84 * 10, show_global_state=False, show_num_agents=1)
+    viewer.set_title("Replay")
+    SAVE_GIF = False
+    if SAVE_GIF:
         from PIL import Image
-        from gigastep import GigastepViewer
-        viewer = GigastepViewer(84 * 4, show_num_agents=0)
-        viewer.set_title("Replay")
-        
+
         frame_num = 0
         frame_list = []
-    
+
     env, unwrapped_env = env_tuple
-    rng, _rng = jax.random.split(rng)
-    obs, state = env.reset(_rng)
-    ep_done = False
-    while not ep_done:
-        action = action_fn_base(network_params, obs, rng)
+
+    while True:
         rng, _rng = jax.random.split(rng)
-        obs, state, r, done, info = env.step(_rng, state, action)
-        ep_done = get_ep_done(unwrapped_env, done)
+        (obs_rgb, obs_vec), state = env.reset(_rng)
+        ego_done = False
 
-        if VISUALIZE:
+        rgb_obs_buffer = []
+        vec_obs_buffer = []
+        action_buffer = []
+        reward_buffer = []
+        total_reward_0 = 0
+        while not ego_done:
+            action = action_fn_base(network_params, obs_vec, rng)
+            action_ego = viewer.continuous_action
+            action_ego = jnp.argmin(
+                jnp.linalg.norm(action_ego[None, :] - unwrapped_env.action_lut, axis=1)
+            )
+            action_buffer.append(action_ego)
+            rgb_obs_buffer.append(obs_rgb[0])
+            vec_obs_buffer.append(obs_vec[0])
+
+            is_ego = jnp.arange(action.shape[0]) == 0
+            # print(
+            #     f"action_ego: {action_ego} ({unwrapped_env.action_lut[action_ego]} from {viewer.continuous_action})"
+            # )
+            action = jnp.where(is_ego, action_ego, action)
+            rng, _rng = jax.random.split(rng)
+            obs, state, r, done, info = env.step(_rng, state, action)
+            obs_rgb, obs_vec = obs
+            # ep_done = get_ep_done(unwrapped_env, done)
+            ego_done = done[0]
+
+            total_reward_0 += r[0]
+            reward_buffer.append(r[0])
+
             rgb_obs = env.get_global_observation(state.env_state)
-            frame = viewer.draw(unwrapped_env, state.env_state, rgb_obs)
-            frame_list.append(frame)
-            frame_num += 1
+            frame = viewer.draw(unwrapped_env, state.env_state, obs_rgb)
+            if SAVE_GIF:
+                frame_list.append(frame)
+                frame_num += 1
+            if viewer.should_quit:
+                import sys
 
-    if VISUALIZE:
-        filepath = "./logdir/test.gif"
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        imgs = [Image.fromarray(frame) for frame in frame_list]
-        imgs[0].save(filepath, save_all=True, append_images=imgs[1:], duration=50, loop=0)
+                sys.exit(0)
+        print(
+            f"Episode done, total reward: {total_reward_0:0.2f} ({len(action_buffer)} ep len)"
+        )
+        os.makedirs("human_data", exist_ok=True)
+        filename = get_filename("human_data")
+        rgb_obs_buffer = np.stack(rgb_obs_buffer, axis=0)
+        vec_obs_buffer = np.stack(vec_obs_buffer, axis=0)
+        action_buffer = np.array(action_buffer)
+        reward_buffer = np.array(reward_buffer)
+        np.savez(
+            filename,
+            rgb_obs=rgb_obs_buffer,
+            vec_obs=vec_obs_buffer,
+            rewards=reward_buffer,
+            action=action_buffer,
+        )
+        with open("human_data/logs.txt", "a") as f:
+            f.write(f"{filename}, {total_reward_0:0.2f}, {action_buffer.shape[0]}\n")
+        print(f"Saved to {filename}")
 
-    # TODO: load checkpoint
-    # TODO: Instantiate viewer object
-    # TODO: Replay the policy here but without jit and scan,
-    #  such that we can use the viewer to visualize the policy
-    #  and use the gamepad or controlling an agent manually
+        if SAVE_GIF:
+            filepath = "./logdir/test.gif"
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            imgs = [Image.fromarray(frame) for frame in frame_list]
+            imgs[0].save(
+                filepath, save_all=True, append_images=imgs[1:], duration=50, loop=0
+            )

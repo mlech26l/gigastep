@@ -9,7 +9,8 @@ import bisect
 
 import numpy as np
 
-from gigastep import GigastepViewer
+from gigastep import make_scenario, GigastepViewer
+
 
 SLEEP_TIME = 0.01
 
@@ -318,8 +319,6 @@ class Evaluator:
 
 
 
-
-
 class Rating():
     def __init__(self, device, save_path, env_name, env_cfg,
                  num_match=5):
@@ -335,15 +334,16 @@ class Rating():
             data = torch.load(self.save_path + "rating_log.pt")
             self.rating = data["rating"]
             self.path_pool = data["path_pool"]
+            print("rating log loaded")
         else:
             self.rating = []
             self.path_pool = []
+            print("failed to load rating log")
 
     def update_pool_rating(self):
         pool_size = len(self.rating)
-
+        print("Updating pool")
         for i in range(pool_size):
-            print(f"Rating {i} in length of {pool_size}")
             for j in range(pool_size):
                 if i != j:
                     policy_0, _ = torch.load(self.path_pool[i])
@@ -354,13 +354,14 @@ class Rating():
                         self.rating[i],
                         self.rating[j]
                     )
-        print(f"rating list is{self.rating}")
+        print("pool updating is done")
+        print(f"rating list is {self.rating}")
         self._save_pool()
 
-    def rate_policy(self, policy):
+    def rate_policy(self, policy, rating_0=1200, add_policy_to_pool=False):
 
         policy.to(self.device)
-        rating_0 = 1200
+        # rating_0 = 1200
         if len(self.rating) == 0:
             policy_1 = None
             rating_0, _, winning_0 = self._match(policy, policy_1,
@@ -374,7 +375,7 @@ class Rating():
         rank = bisect.bisect_left(sorted(self.rating), rating_0) + 1
 
         if len(self.rating) == 0:
-            if winning_0 == 1:
+            if winning_0 == 1 or add_policy_to_pool:
                 position = len(self.rating)
                 path = f"pool_{position:04}.pt"
                 torch.save([policy, None], f"{self.save_path}{path}")
@@ -382,11 +383,12 @@ class Rating():
                 self.rating.append(rating_0)
                 self.path_pool.append(self.save_path + path)
                 self._save_pool()
+                print(f"Rating for this agent is done, rating of agent is {rating_0}")
             else:
-                print(f"rating of agent is {rating_0} it is worse than base")
+                print(f"rating of agent is {rating_0}, it is worse than base")
 
         else:
-            if rating_0 > sorted(self.rating)[-1]:
+            if rating_0 > sorted(self.rating)[-1] or add_policy_to_pool:
                 position = len(self.rating)
                 self.rating.append(rating_0)
                 path = f"pool_{position:04}.pt"
@@ -408,9 +410,13 @@ class Rating():
         torch.save(data, self.save_path + "rating_log.pt")
 
     def _match(self, policy_0, policy_1, rate_0, rate_1):
-        from enjoy_policy_discrete import evaluation_jax  # need to add enjoy_policy_discrete
+        torch_jax_policy = True
+        if torch_jax_policy:
+            from enjoy_policy_discrete import evaluation_jax
+            policy_0.to(self.device)
+            policy_1.to(self.device)
 
-        videos, winning_0 = evaluation_jax(self.env_name, obs_type="rgb",
+            videos, winning_0 = evaluation_jax(self.env_name, obs_type="rgb",
                                            discrete_actions=True,
                                            actor_critic=policy_0,
                                            actor_critic_opponent=policy_1,
@@ -419,13 +425,23 @@ class Rating():
                                            headless=True,
                                            env_cfg=self.env_cfg,
                                            show_num_agents=0)
+        else:
+            env = make_scenario(self.env_name,
+                            **vars(self.env_cfg)
+                            )
+            winning_0, wining_1,tie_rate = loop_env_vectorized_two_Policy(
+                        env,
+                        policy_ego = None,
+                        policy_opp = None,
+                        device="cpu",
+                        switch_side = False)
 
         winning_0 = 1 if winning_0 > 0.5 else 0
 
-        Exp_0 = 1 / (1 + 10 ** (rate_1 - rate_0))
-        Exp_1 = 1 / (1 + 10 ** (rate_0 - rate_1))
+        Exp_0 = 1 / (1 + 10 ** ((rate_1 - rate_0)/400))
+        Exp_1 = 1 / (1 + 10 ** ((rate_0 - rate_1)/400))
 
-        K = 16
+        K = 32
         rate_0 = rate_0 + K * (winning_0 - Exp_0)
         rate_1 = rate_1 + K * (1 - winning_0 - Exp_1)
 
@@ -534,6 +550,57 @@ def loop_env_vectorized(env, policy=None, device="cpu", switch_side = False):
             print(str(evaluator))
             # if frame_idx > 400:
             #     sys.exit(1)
+
+    return [evaluator.team_a_wins / evaluator.total_games,
+            evaluator.team_b_wins / evaluator.total_games,
+            evaluator.total_games_tie / evaluator.total_games]
+
+
+
+def loop_env_vectorized_two_Policy(env, policy_ego = None, policy_opp = None, device="cpu", switch_side = False):
+    evaluator = Evaluator(env)
+    batch_size = 20
+    rng = jax.random.PRNGKey(3)
+
+    print("Opponent", str(policy_opp))
+    for ep_idx in range(1):
+        ep_done = np.zeros(batch_size, dtype=jnp.bool_)
+        key, rng = jax.random.split(rng, 2)
+        key = jax.random.split(key, batch_size)
+        state, obs = env.v_reset(key)
+        t = 0
+
+        # Torch policy
+        # ego = Torch_Policy(policy=policy, env=env, device=device, vectorize=True)
+        # Jax based  
+        ego = policy_ego
+
+        while not jnp.all(ep_done):
+            rng, key, key2 = jax.random.split(rng, 3)
+            if policy_ego  is None:
+                action_ego = jnp.zeros(
+                    (batch_size, env.n_agents, 3)
+                )  # ego does nothing
+            else:
+                action_ego = ego.apply(obs, key2)
+
+            key2 = jax.random.split(key2, batch_size)
+            action_opp = policy_opp.v_apply(obs, key2)
+
+            action = evaluator.v_merge_actions(action_ego, action_opp)
+
+            rng, key = jax.random.split(rng, 2)
+            key = jax.random.split(key, batch_size)
+            state, obs, r, dones, ep_done = env.v_step(state, action, key)
+            evaluator.update_step(r, dones, ep_done)
+
+            time.sleep(SLEEP_TIME)
+            t += 1
+            # print("t", t, "ep_done", ep_done)
+        evaluator.update_episode()
+        print(str(evaluator))
+        # if frame_idx > 400:
+        #     sys.exit(1)
 
     return [evaluator.team_a_wins / evaluator.total_games,
             evaluator.team_b_wins / evaluator.total_games,

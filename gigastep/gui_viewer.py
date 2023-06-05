@@ -175,7 +175,7 @@ class GigastepViewer:
         if not self.headless:
             self._show_image(frame_buffer)
         self.poll()
-        self.clock.tick(30)
+        self.clock.tick(10)
         frame_buffer = self.cv2.cvtColor(frame_buffer, self.cv2.COLOR_RGB2BGR)
         return np.transpose(frame_buffer, [1, 0, 2])
 

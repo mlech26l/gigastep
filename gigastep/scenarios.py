@@ -8,7 +8,9 @@ class ScenarioBuilder:
         self._per_agent_sprites = []
         self._per_agent_max_health = []
         self._per_agent_range = []
+        self._per_agent_damage_range = []
         self._per_agent_thrust = []
+        self._per_agent_idle_reward = []
         self._map = "all"
         self._map_size = None
         self._kwargs = {}
@@ -29,13 +31,17 @@ class ScenarioBuilder:
         sprite: int = 1,
         max_health: float = 1,
         range: float = 1,
+        damage_range: float = 1,
+        idle_reward: float = 0,
         thrust: float = 1,
     ):
         self._per_agent_team.append(team)
         self._per_agent_sprites.append(sprite)
         self._per_agent_max_health.append(max_health)
         self._per_agent_range.append(range)
+        self._per_agent_damage_range.append(damage_range)
         self._per_agent_thrust.append(thrust)
+        self._per_agent_idle_reward.append(idle_reward)
 
     def add_type(self, team, agent_type):
         if agent_type == "default":
@@ -48,6 +54,10 @@ class ScenarioBuilder:
             self.add(team=team, sprite=5, max_health=1, range=1, thrust=2)
         elif agent_type == "boss":
             self.add(team=team, sprite=6, max_health=3, range=1, thrust=0.8)
+        elif agent_type == "seeker":
+            self.add(team=team, sprite=5)
+        elif agent_type == "hider":
+            self.add(team=team, damage_range=0, idle_reward=1)
         else:
             raise ValueError(f"Unknown agent type {agent_type}")
 
@@ -73,7 +83,9 @@ class ScenarioBuilder:
             "per_agent_sprites": jnp.array(self._per_agent_sprites),
             "per_agent_max_health": jnp.array(self._per_agent_max_health),
             "per_agent_range": jnp.array(self._per_agent_range),
+            "per_agent_damage_range": jnp.array(self._per_agent_damage_range),
             "per_agent_thrust": jnp.array(self._per_agent_thrust),
+            "per_agent_idle_reward": jnp.array(self._per_agent_idle_reward),
             "maps": self._map,
         }
         if self._map_size is not None:
@@ -101,6 +113,25 @@ class ScenarioBuilder:
 
 
 _builtin_scenarios = {
+    "hide_and_seek_5_vs_5": {
+        "team_0": {"seeker": 5},
+        "team_1": {"hider": 5},
+        "map": "empty",
+        "kwargs": {
+            "damage_cone_depth": 1.0,
+            "damage_cone_angle": jnp.pi,  # +-, thus 360 degrees
+            "collision_range": 0.0,  # no collision
+            "max_episode_length": 500,
+            "reward_game_won": 1,
+            "reward_defeat_one_opponent": 1,
+            "reward_detection": 0,
+            "reward_damage": 1,
+            "reward_idle": 0,
+            "reward_agent_disabled": 1,
+            "reward_collision_agent": 0,
+            "reward_collision_obstacle": 1,
+        },
+    },
     "waypoint_5_vs_5": {
         "team_0": {"default": 5},
         "team_1": {"default": 5},

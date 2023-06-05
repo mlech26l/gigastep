@@ -103,7 +103,6 @@ class GigastepEnv:
         enable_waypoints=False,
         collision_range=0.4,
         collision_altitude=0.5,
-        collision_penalty=10,
         limit_x=10,
         limit_y=10,
         waypoint_size=0.6,
@@ -115,7 +114,9 @@ class GigastepEnv:
         per_agent_thrust=None,
         per_agent_max_health=None,
         per_agent_range=None,
+        per_agent_damage_range=None,
         per_agent_team=None,
+        per_agent_idle_reward=None,
         reward_game_won=10,
         reward_defeat_one_opponent=100,
         reward_detection=0,
@@ -125,6 +126,7 @@ class GigastepEnv:
         reward_collision_agent=0,
         reward_collision_obstacle=0,
         reward_hit_waypoint=0,
+        divide_reward_by_team_size=True,
         discrete_actions=False,
         obs_type="rgb",
         max_agent_in_vec_obs=15,
@@ -146,7 +148,6 @@ class GigastepEnv:
         self.healing_per_second = healing_per_second
         self.collision_range = jnp.square(collision_range)
         self.collision_altitude = collision_altitude
-        self.collision_penalty = collision_penalty
         self.debug_reward = debug_reward
         self.use_stochastic_obs = use_stochastic_obs
         self.use_stochastic_comm = use_stochastic_comm
@@ -165,6 +166,7 @@ class GigastepEnv:
         self.reward_collision_agent = reward_collision_agent
         self.reward_collision_obstacle = reward_collision_obstacle
         self.reward_hit_waypoint = reward_hit_waypoint
+        self.divide_reward_by_team_size = divide_reward_by_team_size
         self.precision = precision
 
         if per_agent_sprites is None:
@@ -179,6 +181,12 @@ class GigastepEnv:
         if per_agent_range is None:
             per_agent_range = jnp.ones(n_agents, dtype=jnp.float32)
         self._per_agent_range = per_agent_range
+        if per_agent_damage_range is None:
+            per_agent_damage_range = jnp.ones(n_agents, dtype=jnp.float32)
+        self._per_agent_damage_range = per_agent_damage_range
+        if per_agent_idle_reward is None:
+            per_agent_idle_reward = jnp.zeros(n_agents, dtype=jnp.float32)
+        self._per_agent_idle_reward = per_agent_idle_reward
 
         if obs_type not in ("rgb", "vector", "rgb_vector"):
             raise ValueError(
@@ -440,7 +448,7 @@ class GigastepEnv:
         ) / (self.cone_depth * agent_states["detection_range"][None, :])
         closeness_score_damage = (
             jnp.square(x[:, None] - x[None, :]) + jnp.square(y[:, None] - y[None, :])
-        ) / (self.damage_cone_depth * agent_states["detection_range"][None, :])
+        ) / (self.damage_cone_depth * self._per_agent_damage_range[None, :])
         angles2 = jnp.arctan2(y[:, None] - y[None, :], x[:, None] - x[None, :])
         angles = (
             jnp.fmod(
@@ -547,6 +555,8 @@ class GigastepEnv:
         else:
             reward = jnp.zeros(num_agents)
 
+        reward = reward + self._per_agent_idle_reward
+
         if self.reward_defeat_one_opponent > 0:
             reward_defeat_one_opponent = (
                 (alive_team1 - alive_team1_pre)  #  * 0.5
@@ -611,9 +621,7 @@ class GigastepEnv:
             )
 
         if self.reward_collision_obstacle > 0:
-            reward_collision_obstacle = (
-                out_of_bounds + hit_box * self.collision_penalty * alive
-            )
+            reward_collision_obstacle = (out_of_bounds + hit_box) * alive
             reward = reward - self.reward_collision_obstacle * reward_collision_obstacle
             reward_info["reward_collision_obstacle"] = (
                 -self.reward_collision_obstacle * reward_collision_obstacle
@@ -641,7 +649,8 @@ class GigastepEnv:
         reward_info["reward_game_won"] = self.reward_game_won * game_won_reward
 
         # normalize reward to number of agents. Make the reward in a similar level for different number of agents
-        reward = reward / num_agents
+        if self.divide_reward_by_team_size:
+            reward = reward / num_agents
         reward = reward * alive_pre  # if agent was already dead, reward is zero
 
         agent_states = {
@@ -1083,6 +1092,7 @@ class GigastepEnv:
         health = jnp.ones((self.n_agents,), dtype=jnp.float32)
         alive = jnp.ones((self.n_agents,), dtype=jnp.float32)
         tracked = jnp.zeros((self.n_agents, self.n_agents), dtype=jnp.float32)
+        # TODO: Some values are static, and does not need to be in the state
         agent_state = {
             "x": x,
             "y": y,

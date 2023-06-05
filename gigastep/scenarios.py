@@ -1,3 +1,5 @@
+import copy
+
 from gigastep import GigastepEnv
 import jax.numpy as jnp
 
@@ -55,7 +57,7 @@ class ScenarioBuilder:
         elif agent_type == "boss":
             self.add(team=team, sprite=6, max_health=3, range=1, thrust=0.8)
         elif agent_type == "seeker":
-            self.add(team=team, sprite=5)
+            self.add(team=team)
         elif agent_type == "hider":
             self.add(team=team, damage_range=0, idle_reward=1)
         else:
@@ -118,18 +120,19 @@ _builtin_scenarios = {
         "team_1": {"hider": 5},
         "map": "empty",
         "kwargs": {
+            "damage_per_second": 10,
             "damage_cone_depth": 1.0,
             "damage_cone_angle": jnp.pi,  # +-, thus 360 degrees
             "collision_range": 0.0,  # no collision
             "max_episode_length": 500,
-            "reward_game_won": 1,
-            "reward_defeat_one_opponent": 1,
+            "reward_game_won": 50,
+            "reward_defeat_one_opponent": 5,
             "reward_detection": 0,
-            "reward_damage": 1,
+            "reward_damage": 10,
             "reward_idle": 0,
-            "reward_agent_disabled": 1,
+            "reward_agent_disabled": 10,
             "reward_collision_agent": 0,
-            "reward_collision_obstacle": 1,
+            "reward_collision_obstacle": 10,
         },
     },
     "waypoint_5_vs_5": {
@@ -289,6 +292,29 @@ _builtin_scenarios = {
 }
 
 
+def _make_deterministic_variants(list_of_scenarios):
+    for name in list_of_scenarios:
+        if name.endswith("_det"):
+            continue
+        det_name = name + "_det"
+        if det_name in _builtin_scenarios.keys():
+            continue
+            # already exists
+        deterministic_scenario = copy.deepcopy(_builtin_scenarios[name])
+        if "kwargs" not in deterministic_scenario:
+            deterministic_scenario["kwargs"] = {}
+        deterministic_scenario["kwargs"]["use_stochastic_obs"] = False
+        deterministic_scenario["kwargs"]["use_stochastic_comm"] = False
+        deterministic_scenario["kwargs"]["cone_depth"] = 100
+        deterministic_scenario["kwargs"]["cone_angle"] = 2 * jnp.pi
+        deterministic_scenario["kwargs"]["reward_detection"] = 0
+
+        _builtin_scenarios[det_name] = deterministic_scenario
+
+
+_make_deterministic_variants(list(_builtin_scenarios.keys()))
+
+
 def make_scenario(name, **kwargs):
     """Instantiates a GigastepEnv by the name of the built-in scenarios
 
@@ -300,6 +326,38 @@ def make_scenario(name, **kwargs):
     if name not in _builtin_scenarios.keys():
         raise ValueError(f"Scenario {name} not found.")
 
+    warning_already_printed = False
+    if "use_stochastic_obs" in kwargs and kwargs["use_stochastic_obs"] is False:
+        print(
+            "WARNING: You are overriding the use_stochastic_obs flag."
+            "If you want to use a fully observable scenario, "
+            f"use the _det variant of the scenario: make_scenario('{name}_det')",
+        )
+        warning_already_printed = True
+    if "use_stochastic_comm" in kwargs and kwargs["use_stochastic_comm"] is False:
+        if not warning_already_printed:
+            print(
+                "WARNING: You are overriding the use_stochastic_comm flag."
+                "If you want to use a fully observable scenario, "
+                f"use the _det variant of the scenario: make_scenario('{name}_det')",
+            )
+        warning_already_printed = True
+    if "cone_depth" in kwargs:
+        if not warning_already_printed:
+            print(
+                "WARNING: You are overriding the cone_depth value."
+                "If you want to use a fully observable scenario, "
+                f"use the _det variant of the scenario: make_scenario('{name}_det')",
+            )
+        warning_already_printed = True
+    if "cone_angle" in kwargs:
+        if not warning_already_printed:
+            print(
+                "WARNING: You are overriding the cone_angle value."
+                "If you want to use a fully observable scenario, "
+                f"use the _det variant of the scenario: make_scenario('{name}_det')",
+            )
+        warning_already_printed = True
     scenario = _builtin_scenarios[name]
     scenario = ScenarioBuilder.from_config(scenario)
     return scenario.make(**kwargs)

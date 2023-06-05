@@ -90,13 +90,14 @@ class GigastepEnv:
     def __init__(
         self,
         very_close_cone_depth=1.0,
-        cone_depth=6.0,
+        cone_depth=3.0,
         cone_angle=jnp.pi * 0.75,
-        damage_cone_depth=4.2,
+        damage_cone_depth=2.05,
         damage_cone_angle=jnp.pi / 4,
         damage_per_second=1,
         min_tracking_time=3,
         max_tracking_time=10,
+        communication_range=8,
         healing_per_second=0.1,
         use_stochastic_obs=True,
         use_stochastic_comm=True,
@@ -139,10 +140,10 @@ class GigastepEnv:
         self.n_agents = n_agents
         self.very_close_cone_depth = jnp.square(very_close_cone_depth)
         self.cone_depth = jnp.square(cone_depth)
+        self.damage_cone_depth = jnp.square(damage_cone_depth)
         self.cone_angle = cone_angle
         self.min_tracking_time = min_tracking_time
         self.max_tracking_time = max_tracking_time
-        self.damage_cone_depth = damage_cone_depth
         self.damage_cone_angle = damage_cone_angle
         self.damage_per_second = damage_per_second
         self.healing_per_second = healing_per_second
@@ -151,7 +152,7 @@ class GigastepEnv:
         self.debug_reward = debug_reward
         self.use_stochastic_obs = use_stochastic_obs
         self.use_stochastic_comm = use_stochastic_comm
-        self.max_communication_range = 10
+        self.max_communication_range = communication_range
         self.waypoint_size = waypoint_size
         self.enable_waypoints = enable_waypoints
         self.max_agent_in_vec_obs = min(self.n_agents, max_agent_in_vec_obs)
@@ -633,8 +634,6 @@ class GigastepEnv:
             reward_info["reward_agent_disabled"] = (
                 -self.reward_agent_disabled * reward_agent_disabled
             )
-
-        # TODO: add other rewards here for disabling other agents and exploration here
 
         # Positive reward for winning the game (weighted by number of agents alive)
         game_won_reward = (alive_team2 == 0) * (teams == 0) * alive + (

@@ -11,7 +11,8 @@ from PIL import Image
 def loop_user():
     viewer = GigastepViewer(84 * 4, show_num_agents=1)
     viewer.set_title("User input")
-    env = make_scenario("waypoint_5_vs_5")
+    env = make_scenario("hide_and_seek_5_vs_5_det")
+    # env = make_scenario("waypoint_5_vs_5")
     rng = jax.random.PRNGKey(1)
     frames = []
     while True:
@@ -32,6 +33,7 @@ def loop_user():
             state, obs, r, a, ep_done = env.step(state, action, key)
             print(f"Step {t:04d} reward {r[0]:0.1f}")
             frame_buffer = viewer.draw(env, state, obs)
+            t += 1
             # print(f"Waypoint: {state[1]['waypoint_location']}")
             # print(f"Ego position: {state[0]['x'][0]:0.2f}, {state[0]['y'][0]:0.2f}")
             # is_in_x = (

@@ -4,3 +4,4 @@ gymnax
 chex
 pygame
 flax
+opencv-python

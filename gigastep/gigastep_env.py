@@ -249,16 +249,16 @@ class GigastepEnv:
             self.observation_space = (rgb_obs_spec, vector_obs_spec)
 
         self.discrete_actions = discrete_actions
+        self.action_lut = jnp.array(
+            jnp.meshgrid(
+                jnp.array([-1.0, 0.0, 1.0]),
+                jnp.array([-1.0, 0.0, 1.0]),
+                jnp.array([-1.0, 0.0, 1.0]),
+            )
+        ).T.reshape(-1, 3)
         if self.discrete_actions:
             # 3x3x3 = 27 actions {+1, 0, -1}^3
             self.action_space = Discrete(3**3)
-            self.action_lut = jnp.array(
-                jnp.meshgrid(
-                    jnp.array([-1.0, 0.0, 1.0]),
-                    jnp.array([-1.0, 0.0, 1.0]),
-                    jnp.array([-1.0, 0.0, 1.0]),
-                )
-            ).T.reshape(-1, 3)
         else:
             self.action_space = Box(low=-jnp.ones(3), high=jnp.ones(3))
 

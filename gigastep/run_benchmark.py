@@ -196,10 +196,11 @@ class MLPPolicy(nn.Module):
 
 
 def main():
-    BATCH_SIZES = [1, 128, 1024, 4096]
+    BATCH_SIZES = [1, 8, 32, 128, 512, 2048, 8192]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", default="latex", type=str, help="Output format")
+    parser.add_argument("--no_policy", action="store_true", help="Don't run policy")
     args = parser.parse_args()
 
     latex_format = args.format == "latex"
@@ -221,7 +222,8 @@ def main():
                 policy = ConvPolicy(num_outputs=env.action_space.shape[0])
                 input_shape = (1, 84, 84, 3)
             nn_state = create_train_state(policy, jax.random.PRNGKey(0), input_shape)
-            # nn_state = None
+            if args.no_policy:
+                nn_state = None
 
             start_time = time.time()
             if batch_size == 1:

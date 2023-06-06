@@ -24,16 +24,16 @@ def loop_env(env):
         # while not ep_done and t < 50:
         while True:
             rng, key = jax.random.split(rng, 2)
-            # action = jax.random.uniform(
-            #     key, shape=(env.n_agents, 3), minval=-1, maxval=1
-            # )
-            action = jnp.zeros((env.n_agents, 3))
+            action = jax.random.uniform(
+                key, shape=(env.n_agents, 3), minval=-1, maxval=1
+            )
+            # action = jnp.zeros((env.n_agents, 3))
             rng, key = jax.random.split(rng, 2)
             state, obs, r, a, d = env.step(state, action, key)
             img = viewer.draw(env, state, obs)
 
             img = img[0 : 2 * img.shape[0] // 3]
-            # cv2.imwrite(f"video/scenario/frame_{frame_idx:04d}.png", img)
+            cv2.imwrite(f"video/scenario/frame_{frame_idx:04d}.png", img)
             if viewer.should_pause:
                 while True:
                     img = viewer.draw(env, state, obs)
@@ -53,7 +53,7 @@ def loop_env(env):
 
 if __name__ == "__main__":
     # convert -delay 3 -loop 0 video/scenario/frame_*.png video/scenario.webp
-    # loop_env(env=make_scenario("identical_20_vs_20", use_stochastic_comm=False))
-    loop_env(env=make_scenario("special_20_vs_20", use_stochastic_comm=False))
+    loop_env(env=make_scenario("waypoint_5_vs_5_det", use_stochastic_comm=False))
+    # loop_env(env=make_scenario("special_20_vs_20", use_stochastic_comm=False))
     # loop_env(env = make_scenario("identical_20_vs_20"))
     # loop_env(env = make_scenario("identical_20_vs_20"))

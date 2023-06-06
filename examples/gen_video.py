@@ -25,14 +25,14 @@ SLEEP_TIME = 0.01
 
 
 def loop_2agents():
-    viewer = GigastepViewer(4 * 84)
-    dyn = GigastepEnv()
+    viewer = GigastepViewer(4 * 84, show_num_agents=2)
     rng = jax.random.PRNGKey(1)
     os.makedirs("video/2agents", exist_ok=True)
     s1 = GigastepEnv.get_initial_state(y=3, x=3, team=0)
     s2 = GigastepEnv.get_initial_state(y=6, x=7, heading=-jnp.pi / 2, team=1)
     # state = jnp.stack([s1, s2, s3], axis=0)
     state = stack_agents(s1, s2)
+    dyn = GigastepEnv(n_agents=state[0]["x"].shape[0])
     frame = 0
     while jnp.sum(dyn.get_dones(state)) > 0:
         a1 = GigastepEnv.action(speed=1)
@@ -46,8 +46,7 @@ def loop_2agents():
 
 
 def loop_some_agents():
-    viewer = GigastepViewer(4 * 84)
-    dyn = GigastepEnv()
+    viewer = GigastepViewer(4 * 84, show_num_agents=3)
     rng = jax.random.PRNGKey(1)
     os.makedirs("video/some_agents", exist_ok=True)
     s1 = GigastepEnv.get_initial_state(y=5, x=1, team=0)
@@ -57,6 +56,7 @@ def loop_some_agents():
     s4 = GigastepEnv.get_initial_state(y=4.5, x=2, team=1)
     s5 = GigastepEnv.get_initial_state(y=3.5, x=2, team=1)
     state = stack_agents(s1, s2, s3, s4, s5, s6)
+    dyn = GigastepEnv(n_agents=state[0]["x"].shape[0])
     frame = 0
     while jnp.sum(dyn.get_dones(state)) > 0:
         action = jnp.zeros((6, 3))
@@ -66,7 +66,6 @@ def loop_some_agents():
         save_frame(
             dyn, state, obs, f"video/some_agents/frame_{frame:04d}.png", obs2=True
         )
-        print("tracked", state[0]["tracked"])
         frame += 1
 
 
@@ -105,7 +104,7 @@ def loop_random_agents():
 
     key, rng = jax.random.split(rng, 2)
     os.makedirs("video/random", exist_ok=True)
-    viewer = GigastepViewer(4 * 84)
+    viewer = GigastepViewer(4 * 84, show_num_agents=3)
 
     frame = 0
     t = 0
@@ -142,7 +141,7 @@ def loop_random_many_agents():
 
     key, rng = jax.random.split(rng, 2)
     os.makedirs("video/many", exist_ok=True)
-    viewer = GigastepViewer(2 * res)
+    viewer = GigastepViewer(2 * res, show_num_agents=3)
 
     state, obs = dyn.reset(key)
     frame = 0
@@ -157,11 +156,8 @@ def loop_random_many_agents():
 
 
 def loop_visible_debug():
-    viewer = GigastepViewer(4 * 84)
+    viewer = GigastepViewer(4 * 84, show_num_agents=1)
 
-    dyn = GigastepEnv(
-        collision_range=0.0, use_stochastic_obs=True, damage_per_second=0
-    )  # disable collision
     rng = jax.random.PRNGKey(3)
     os.makedirs("video/visibility", exist_ok=True)
     frame = 0
@@ -171,10 +167,16 @@ def loop_visible_debug():
             for j in range(19):
                 state.append(
                     GigastepEnv.get_initial_state(
-                        y=3 + 0.25 * j, x=3 + 0.25 * i, v=0, team=1, z=dyn.z_max
+                        y=3 + 0.25 * j, x=3 + 0.25 * i, v=0, team=1, z=10
                     )
                 )
         state = stack_agents(*state)
+        dyn = GigastepEnv(
+            collision_range=0.0,
+            use_stochastic_obs=True,
+            damage_per_second=0,
+            n_agents=state[0]["x"].shape[0],
+        )  # disable collision
         # state = jnp.stack(state, axis=0)
         action = [GigastepEnv.action(speed=0) for s in range(state[0]["x"].shape[0])]
         action = jnp.stack(action, axis=0)
@@ -190,15 +192,16 @@ def loop_visible_debug():
 def loop_2agents_altitude():
     viewer = GigastepViewer(84 * 4)
     viewer.set_title("3 agents, same thrust but different altitude")
-    dyn = GigastepEnv()
     rng = jax.random.PRNGKey(1)
     frame = 0
     os.makedirs("video/dive", exist_ok=True)
     s1 = GigastepEnv.get_initial_state(y=3, team=0)
-    s2 = GigastepEnv.get_initial_state(y=5, team=0, z=dyn.z_max)
+    s2 = GigastepEnv.get_initial_state(y=5, team=0, z=10)
     s3 = GigastepEnv.get_initial_state(y=7, team=0, z=0)
     # state = jnp.stack([s1, s2, s3], axis=0)
     state = stack_agents(s1, s2, s3)
+    dyn = GigastepEnv(n_agents=state[0]["x"].shape[0])
+
     t = 0
     while jnp.sum(dyn.get_dones(state)) > 0:
         a1 = GigastepEnv.action(speed=1)
@@ -216,7 +219,7 @@ def loop_2agents_altitude():
 
 
 def loop_maps():
-    viewer = GigastepViewer(84 * 4)
+    viewer = GigastepViewer(84 * 4, show_num_agents=3)
     viewer.set_title("10 random agents")
     n_agents = 20
     dyn = GigastepEnv(n_agents=n_agents)
@@ -244,7 +247,7 @@ def loop_maps():
 
 
 def loop_heterogenous():
-    viewer = GigastepViewer(84 * 4)
+    viewer = GigastepViewer(84 * 4, show_num_agents=3)
     viewer.set_title("3 agents, same thrust but different altitude")
     dyn = GigastepEnv(
         use_stochastic_obs=False, use_stochastic_comm=False, very_close_cone_depth=10
@@ -276,14 +279,14 @@ def loop_heterogenous():
 
 
 if __name__ == "__main__":
-    loop_some_agents()
+    # loop_some_agents()
     # loop_2agents_altitude()
     # loop_2agents()
     # loop_visible_debug()
-    # loop_random_agents()
-    # loop_random_many_agents()
-    # loop_maps()
-    # loop_heterogenous()
+    loop_random_agents()
+    loop_random_many_agents()
+    loop_maps()
+    loop_heterogenous()
     # convert -delay 10 -loop 0 video/random/frame_*.png video/random.gif
     # convert -delay 10 -loop 0 video/2agents/frame_*.png video/2agents.gif
     # convert -delay 10 -loop 0 video/visibility/frame_*.png video/visibility.gif

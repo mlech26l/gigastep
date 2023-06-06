@@ -56,7 +56,7 @@ _builtin_maps["four_rooms"] = {
         dtype=jnp.float32,
     ),
     "start_pos_team_a": jnp.array([1, 1, 9, 3], dtype=jnp.float32),
-    "start_pos_team_b": jnp.array([1, 7, 9, 9 ], dtype=jnp.float32),
+    "start_pos_team_b": jnp.array([1, 7, 9, 9], dtype=jnp.float32),
     "start_height": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
@@ -70,81 +70,82 @@ _builtin_maps["center_block"] = {
         dtype=jnp.float32,
     ),
     "start_pos_team_a": jnp.array([1, 1, 9, 3], dtype=jnp.float32),
-    "start_pos_team_b": jnp.array([1, 7, 9, 9 ], dtype=jnp.float32),
+    "start_pos_team_b": jnp.array([1, 7, 9, 9], dtype=jnp.float32),
     "start_height": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_a": jnp.array([0, 0], dtype=jnp.float32),
     "start_heading_team_b": jnp.array([jnp.pi, jnp.pi], dtype=jnp.float32),
 }
 _builtin_maps["center_block_flipped"] = flip_start_pos(_builtin_maps["center_block"])
 # TODO: Upgrade the code below to also store the starting positions of the agents.
-_builtin_maps["two_rooms2"] = jnp.array(
-    [
-        [4.8, 0, 5.2, 3],
-        [4.8, 7, 5.2, 10],
-    ],
-    dtype=jnp.float32,
-)
-_builtin_maps["four_blocks"] = jnp.array(
-    [
-        [2.5, 2.5, 3.5, 3.5],
-        [2.5, 6.5, 3.5, 7.5],
-        [6.5, 2.5, 7.5, 3.5],
-        [6.5, 6.5, 7.5, 7.5],
-    ],
-    dtype=jnp.float32,
-)
-_builtin_maps["cross"] = (
-    jnp.array(
-        [
-            [3.5, 4.8, 6.5, 5.2],
-            [4.8, 3.5, 5.2, 6.5],
-        ],
-        dtype=jnp.float32,
-    ),
-)
-_builtin_maps["s1"] = jnp.array(
-    [
-        [0, 3.1, 6.5, 3.5],
-        [3.5, 6.4, 10, 6.8],
-    ],
-    dtype=jnp.float32,
-)
-_builtin_maps["s2"] = jnp.array(
-    [
-        [3.1, 0, 3.5, 6.5],
-        [6.4, 3.5, 6.8, 10],
-    ],
-    dtype=jnp.float32,
-)
-_builtin_maps["tiles"] = jnp.array(
-    [
-        [0, 4.8, 2, 5.2],
-        [8, 4.8, 10, 5.2],
-        [4.8, 0, 5.2, 2],
-        [4.8, 8, 5.2, 10],
-    ],
-    dtype=jnp.float32,
-)
+# _builtin_maps["two_rooms2"] = jnp.array(
+#     [
+#         [4.8, 0, 5.2, 3],
+#         [4.8, 7, 5.2, 10],
+#     ],
+#     dtype=jnp.float32,
+# )
+# _builtin_maps["four_blocks"] = jnp.array(
+#     [
+#         [2.5, 2.5, 3.5, 3.5],
+#         [2.5, 6.5, 3.5, 7.5],
+#         [6.5, 2.5, 7.5, 3.5],
+#         [6.5, 6.5, 7.5, 7.5],
+#     ],
+#     dtype=jnp.float32,
+# )
+# _builtin_maps["cross"] = (
+#     jnp.array(
+#         [
+#             [3.5, 4.8, 6.5, 5.2],
+#             [4.8, 3.5, 5.2, 6.5],
+#         ],
+#         dtype=jnp.float32,
+#     ),
+# )
+# _builtin_maps["s1"] = jnp.array(
+#     [
+#         [0, 3.1, 6.5, 3.5],
+#         [3.5, 6.4, 10, 6.8],
+#     ],
+#     dtype=jnp.float32,
+# )
+# _builtin_maps["s2"] = jnp.array(
+#     [
+#         [3.1, 0, 3.5, 6.5],
+#         [6.4, 3.5, 6.8, 10],
+#     ],
+#     dtype=jnp.float32,
+# )
+# _builtin_maps["tiles"] = jnp.array(
+#     [
+#         [0, 4.8, 2, 5.2],
+#         [8, 4.8, 10, 5.2],
+#         [4.8, 0, 5.2, 2],
+#         [4.8, 8, 5.2, 10],
+#     ],
+#     dtype=jnp.float32,
+# )
 # _builtin_maps["center_block"] = jnp.array(
 #     [
 #         [3.8, 3.8, 6.2, 6.2],
 #     ],
 #     dtype=jnp.float32,
 # )
-_builtin_maps["center_block2"] = jnp.array(
-    [
-        [3, 3, 5, 5],
-        [5, 5, 7, 7],
-    ],
-    dtype=jnp.float32,
-)
-_builtin_maps["center_block3"] = jnp.array(
-    [
-        [3, 5, 5, 7],
-        [5, 3, 7, 5],
-    ],
-    dtype=jnp.float32,
-)
+# _builtin_maps["center_block2"] = jnp.array(
+#     [
+#         [3, 3, 5, 5],
+#         [5, 5, 7, 7],
+#     ],
+#     dtype=jnp.float32,
+# )
+# _builtin_maps["center_block3"] = jnp.array(
+#     [
+#         [3, 5, 5, 7],
+#         [5, 3, 7, 5],
+#     ],
+#     dtype=jnp.float32,
+# )
+#
 
 
 def _onp_draw_boxes(obs, boxes, resolution, limits):

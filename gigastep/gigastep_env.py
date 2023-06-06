@@ -941,6 +941,28 @@ class GigastepEnv:
         obs = obs.at[0, :, :].max(255)
         obs = obs.at[self.resolution[0] - 1, :, :].max(255)
 
+        if self.enable_waypoints:
+            waypoint_num_pixels_x = max(
+                int(self.waypoint_size * self.resolution[0] / self.limits[0]), 1
+            )
+            waypoint_num_pixels_y = max(
+                int(self.waypoint_size * self.resolution[1] / self.limits[1]), 1
+            )
+            waypoint_start_x = jnp.round(
+                map_state["waypoint_location"][0] * self.resolution[0] / self.limits[0]
+            ).astype(jnp.int32)
+            waypoint_start_y = jnp.round(
+                map_state["waypoint_location"][1] * self.resolution[1] / self.limits[1]
+            ).astype(jnp.int32)
+            waypoint_color = (
+                (map_state["waypoint_enabled"] > 0) * jnp.array([127, 0, 127])
+            ).astype(jnp.uint8)
+            for ix in range(waypoint_num_pixels_x):
+                for iy in range(waypoint_num_pixels_y):
+                    obs = obs.at[
+                        waypoint_start_x + ix, waypoint_start_y + iy
+                    ].set(waypoint_color)
+
         team1 = teams
         team2 = 1 - teams
 

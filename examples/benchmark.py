@@ -204,10 +204,10 @@ class MLPPolicy(nn.Module):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=4096, type=int)  # in minutes
-    parser.add_argument("--repeats", default=5, type=int)  # in minutes
-    parser.add_argument("--n_agents", default=20, type=int)  # in minutes
-    parser.add_argument("--n_steps", default=2000, type=int)  # in minutes
+    parser.add_argument("--batch_size", default=4096 * 32, type=int)  # in minutes
+    parser.add_argument("--repeats", default=1, type=int)  # in minutes
+    parser.add_argument("--n_agents", default=2, type=int)  # in minutes
+    parser.add_argument("--n_steps", default=10000, type=int)  # in minutes
     parser.add_argument("--hidden", default=128, type=int)  # in minutes
     parser.add_argument("--obs_type", default="vector")  # in minutes
     args = parser.parse_args()
@@ -224,34 +224,34 @@ def main():
         input_shape = (1, 84, 84, 4)
     nn_state = create_train_state(policy, jax.random.PRNGKey(0), input_shape)
     nn_state = None
-    with GigastepTimer(
-        "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
-    ):
-        run_single_scan(env, nn_state, args.n_steps, args.repeats)
-    with GigastepTimer(
-        "single no scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
-    ):
-        run_single_no_scan(env, nn_state, args.n_steps, args.repeats)
     # with GigastepTimer(
-    #     "vmapped scan",
-    #     args.n_steps,
-    #     args.batch_size * args.repeats,
-    #     args.n_agents,
-    #     args.obs_type,
+    #     "single scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
     # ):
-    #     run_vmapped_scan(
-    #         env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
-    #     )
+    #     run_single_scan(env, nn_state, args.n_steps, args.repeats)
+    # with GigastepTimer(
+    #     "single no scan", args.n_steps * args.repeats, 1, args.n_agents, args.obs_type
+    # ):
+    #     run_single_no_scan(env, nn_state, args.n_steps, args.repeats)
     with GigastepTimer(
-        "vmapped no scan",
+        "vmapped scan",
         args.n_steps,
         args.batch_size * args.repeats,
         args.n_agents,
         args.obs_type,
     ):
-        run_vmapped_no_scan(
+        run_vmapped_scan(
             env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
         )
+    # with GigastepTimer(
+    #     "vmapped no scan",
+    #     args.n_steps,
+    #     args.batch_size * args.repeats,
+    #     args.n_agents,
+    #     args.obs_type,
+    # ):
+    #     run_vmapped_no_scan(
+    #         env, nn_state, args.n_steps * args.repeats, args.batch_size, args.repeats
+    #     )
 
 
 if __name__ == "__main__":

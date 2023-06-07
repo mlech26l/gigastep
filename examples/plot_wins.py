@@ -28,8 +28,9 @@ def load_csv(path):
             results_by_ckpt = results_by_env[env]
 
             n_games = int(n_games)
-            n_team1_wins = int(n_team1_wins)
-            n_team2_wins = int(n_team2_wins)
+            n_team1_wins_bk = n_team1_wins
+            n_team1_wins = int(n_team2_wins) # HACK: to compensate for the mismatch bug in network.py and cross_eval.py; int(n_team1_wins)
+            n_team2_wins = int(n_team1_wins_bk) # HACK: to compensate for the mismatch bug in network.py and cross_eval.py; int(n_team2_wins)
             draws = n_games - n_team1_wins - n_team2_wins
             assert draws >= 0
 

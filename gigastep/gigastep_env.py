@@ -959,9 +959,9 @@ class GigastepEnv:
             ).astype(jnp.uint8)
             for ix in range(waypoint_num_pixels_x):
                 for iy in range(waypoint_num_pixels_y):
-                    obs = obs.at[
-                        waypoint_start_x + ix, waypoint_start_y + iy
-                    ].set(waypoint_color)
+                    obs = obs.at[waypoint_start_x + ix, waypoint_start_y + iy].set(
+                        waypoint_color
+                    )
 
         team1 = teams
         team2 = 1 - teams

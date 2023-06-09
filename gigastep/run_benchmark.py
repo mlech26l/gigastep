@@ -196,7 +196,18 @@ class MLPPolicy(nn.Module):
 
 
 def main():
-    BATCH_SIZES = [1, 8, 32, 128, 512, 2048, 8192]
+    BATCH_SIZES = [
+        1,
+        8,
+        32,
+        128,
+        512,
+        2048,
+        8192,
+        8192 * 4,
+        8191 * 4 * 4,
+        8191 * 4 * 4 * 4,
+    ]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", default="latex", type=str, help="Output format")
@@ -226,12 +237,15 @@ def main():
                 nn_state = None
 
             start_time = time.time()
-            if batch_size == 1:
-                run_single_no_scan(env, nn_state, n_steps=2000, repeats=5)
+            if batch_size > 8192 and obs_type == "rgb":
+                time.sleep(0.5)
             else:
-                run_vmapped_no_scan(
-                    env, nn_state, n_steps=2000, repeats=5, batch_size=batch_size
-                )
+                if batch_size == 1:
+                    run_single_no_scan(env, nn_state, n_steps=2000, repeats=5)
+                else:
+                    run_vmapped_no_scan(
+                        env, nn_state, n_steps=2000, repeats=5, batch_size=batch_size
+                    )
             elapsed = time.time() - start_time
             num_agent_steps = 2000 * batch_size * 4 * 5
             step_per_second = num_agent_steps / elapsed

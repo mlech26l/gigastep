@@ -100,7 +100,7 @@ def main():
         model, jax.random.PRNGKey(0), 1e-3, (1, env.observation_space.shape[0])
     )
 
-    for epoch in range(500):
+    for epoch in range(200):
         total_acc = 0
         pbar = tqdm(tf.data.experimental.cardinality(train_ds).numpy())
         for batch_x, batch_y in train_ds.as_numpy_iterator():
@@ -118,7 +118,10 @@ def main():
     # not.
     # The leaves of `my_tree` may be a number of different types.
     # See `PyTreeCheckpointHandler` documentation.
-    checkpointer.save("bc_policy.ckpt", train_state.params)
+    checkpointer.save(
+        "bc_policy_ckpt",
+        train_state.params,
+    )
     # If you want to restore any of the leaves as sharded arrays, you'll need some
     # extra arguments. See `PyTreeCheckpointHandler` documentation.
     # restored = checkpointer.restore('path/to/directory/checkpoint_name/')

@@ -37,7 +37,7 @@ def loop_user():
     model = MLP(out_dims=3**3)  # instantiate the MLP model
 
     checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    params = {"params": checkpointer.restore("bc_policy.ckpt")}
+    params = {"params": checkpointer.restore("bc_policy_ckpt")}
 
     # env = make_scenario("waypoint_5_vs_5")
     rng = jax.random.PRNGKey(1)
@@ -49,12 +49,13 @@ def loop_user():
         ep_done = False
         while not ep_done:
             rng, key = jax.random.split(rng, 2)
-            a1 = viewer.continuous_action
+            # a1 = viewer.continuous_action
+            a1 = jnp.repeat(jnp.array([[1, 0, 0]]), env.n_agents, axis=0)
             a2 = model.apply(params, obs)
             a2 = jnp.argmax(a2, axis=-1)
             a2 = env.action_lut[a2]
 
-            is_ego = jnp.arange(env.n_agents) == 0
+            is_ego = jnp.arange(env.n_agents) < env.n_agents // 2
 
             action = jnp.where(is_ego[:, None], a1, a2)
             rng, key = jax.random.split(rng, 2)

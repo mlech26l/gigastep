@@ -215,6 +215,7 @@ class GigastepEnv:
         self.resolution = (resolution_x, resolution_y)
         self.time_delta = 0.1
 
+        self._maps_names = maps
         self._maps = get_builtin_maps(maps, self.limits)
         # maps need to be prerendered because range indexing is not supported in jax.jit
         self._prerendered_maps = prerender_maps(
@@ -227,17 +228,24 @@ class GigastepEnv:
             high=255
             * jnp.ones([self.resolution[0], self.resolution[1], 3], dtype=jnp.uint8),
         )
-        # 9 variables per agents, 5 for the waypoint
-        obs_vars_for_waypoint = 5 if self.enable_waypoints else 0
+        # 9 variables per agents
+        obs_var_count = 9 * self.max_agent_in_vec_obs
+        if self.enable_waypoints:
+            #  5 for the waypoint (location + active flag
+            obs_var_count += 5
+        if self._maps_names != "empty":
+            # 4 variables per obstacle (location)
+            obs_var_count += self._maps["boxes"][0].shape[0] * 4
+
         vector_obs_spec = Box(
             low=jnp.NINF
             * jnp.ones(
-                [obs_vars_for_waypoint + 9 * self.max_agent_in_vec_obs],
+                obs_var_count,
                 dtype=jnp.float32,
             ),
             high=jnp.inf
             * jnp.ones(
-                [obs_vars_for_waypoint + 9 * self.max_agent_in_vec_obs],
+                obs_var_count,
                 dtype=jnp.float32,
             ),
         )
@@ -873,9 +881,10 @@ class GigastepEnv:
             )
             vector_obs = vector_obs.flatten()
 
+            additional_obs = []
             if self.enable_waypoints:
                 # normalize
-                box_normalizer_sub = jnp.array(
+                wp_normalizer_sub = jnp.array(
                     [
                         agent_states["x"][agent_id],
                         agent_states["y"][agent_id],
@@ -883,7 +892,7 @@ class GigastepEnv:
                         agent_states["y"][agent_id],
                     ]
                 )
-                box_normalizer_div = jnp.array(
+                wp_normalizer_div = jnp.array(
                     [
                         self.limits[0],
                         self.limits[1],
@@ -893,16 +902,28 @@ class GigastepEnv:
                 )
 
                 relative_waypoint_loc = (
-                    map_state["waypoint_location"] - box_normalizer_sub
-                ) / box_normalizer_div
-                # append obstacles and waypoints to the end of the vector
-                vector_obs = jnp.concatenate(
+                    map_state["waypoint_location"] - wp_normalizer_sub
+                ) / wp_normalizer_div
+
+                additional_obs.append(relative_waypoint_loc.flatten())
+                additional_obs.append(jnp.array([map_state["waypoint_enabled"]]))
+            if self._maps_names != "empty":
+                boxes = self._maps["boxes"][map_state["map_idx"]]
+                box_normalizer_div = jnp.array(
                     [
-                        vector_obs,
-                        relative_waypoint_loc.flatten(),
-                        jnp.array([map_state["waypoint_enabled"]]),
+                        [
+                            self.limits[0],
+                            self.limits[1],
+                            self.limits[0],
+                            self.limits[1],
+                        ]
                     ]
                 )
+                boxes = boxes / jnp.expand_dims(box_normalizer_div, axis=0)
+                additional_obs.append(boxes.flatten())
+            if len(additional_obs) > 0:
+                vector_obs = jnp.concatenate([vector_obs] + additional_obs)
+                # append obstacles and waypoints to the end of the vector
             # now obs of ego is at the beginning of the vector
             # obs other agents are consecutive and sorted by distance from ego
 

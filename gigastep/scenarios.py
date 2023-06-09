@@ -48,13 +48,13 @@ class ScenarioBuilder:
     def add_type(self, team, agent_type):
         if agent_type == "default":
             self.add(team=team, sprite=1, max_health=1, range=1, thrust=1)
-        elif agent_type == "tank":
+        elif agent_type == "health":
             self.add(team=team, sprite=7, max_health=3, range=1, thrust=1)
-        elif agent_type == "sniper":
+        elif agent_type == "range":
             self.add(team=team, sprite=3, max_health=0.5, range=2, thrust=1)
-        elif agent_type == "scout":
+        elif agent_type == "fast":
             self.add(team=team, sprite=5, max_health=1, range=1, thrust=2)
-        elif agent_type == "boss":
+        elif agent_type == "super":
             self.add(team=team, sprite=6, max_health=3, range=1, thrust=0.8)
         elif agent_type == "seeker":
             self.add(team=team)
@@ -135,9 +135,49 @@ _builtin_scenarios = {
             "reward_collision_obstacle": 10,
         },
     },
+    "hide_and_seek_5_vs_10": {
+        "team_0": {"seeker": 5},
+        "team_1": {"hider": 10},
+        "map": "empty",
+        "kwargs": {
+            "damage_per_second": 10,
+            "damage_cone_depth": 1.0,
+            "damage_cone_angle": jnp.pi,  # +-, thus 360 degrees
+            "collision_range": 0.0,  # no collision
+            "max_episode_length": 500,
+            "reward_game_won": 50,
+            "reward_defeat_one_opponent": 5,
+            "reward_detection": 0,
+            "reward_damage": 10,
+            "reward_idle": 0,
+            "reward_agent_disabled": 10,
+            "reward_collision_agent": 0,
+            "reward_collision_obstacle": 10,
+        },
+    },
     "waypoint_5_vs_5": {
         "team_0": {"default": 5},
         "team_1": {"default": 5},
+        "map": "empty",
+        "kwargs": {
+            "damage_cone_depth": 0.0,
+            "episode_ends_one_team_dead": False,
+            "max_episode_length": 500,
+            "enable_waypoints": True,
+            "reward_game_won": 0,
+            "reward_defeat_one_opponent": 0,
+            "reward_detection": 0,
+            "reward_damage": 0,
+            "reward_idle": 0,
+            "reward_agent_disabled": 0,
+            "reward_collision_agent": 0,
+            "reward_collision_obstacle": 0,
+            "reward_hit_waypoint": 50,
+        },
+    },
+    "waypoint_5_vs_3": {
+        "team_0": {"default": 5},
+        "team_1": {"fast": 3},
         "map": "empty",
         "kwargs": {
             "damage_cone_depth": 0.0,
@@ -162,8 +202,8 @@ _builtin_scenarios = {
         "map_size": (20, 20),
     },
     "special_20_vs_20": {
-        "team_0": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
-        "team_1": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
+        "team_0": {"health": 5, "range": 5, "fast": 5, "default": 5},
+        "team_1": {"health": 5, "range": 5, "fast": 5, "default": 5},
         "map": "empty",
         "map_size": (20, 20),
     },
@@ -173,8 +213,8 @@ _builtin_scenarios = {
         "map": "empty",
     },
     "special_10_vs_10": {
-        "team_0": {"tank": 3, "sniper": 3, "scout": 3, "default": 1},
-        "team_1": {"tank": 3, "sniper": 3, "scout": 3, "default": 1},
+        "team_0": {"health": 3, "range": 3, "fast": 3, "default": 1},
+        "team_1": {"health": 3, "range": 3, "fast": 3, "default": 1},
         "map": "empty",
     },
     "identical_5_vs_5": {
@@ -183,8 +223,8 @@ _builtin_scenarios = {
         "map": "empty",
     },
     "special_5_vs_5": {
-        "team_0": {"tank": 1, "sniper": 1, "scout": 1, "boss": 1, "default": 1},
-        "team_1": {"tank": 1, "sniper": 1, "scout": 1, "boss": 1, "default": 1},
+        "team_0": {"health": 1, "range": 1, "fast": 1, "super": 1, "default": 1},
+        "team_1": {"health": 1, "range": 1, "fast": 1, "super": 1, "default": 1},
         "map": "empty",
     },
     "identical_1_vs_1": {
@@ -199,32 +239,32 @@ _builtin_scenarios = {
     },
     "identical_5_vs_1": {
         "team_0": {"default": 5},
-        "team_1": {"boss": 1},
+        "team_1": {"super": 1},
         "map": "empty",
     },
     "special_5_vs_1": {
-        "team_0": {"tank": 1, "sniper": 1, "scout": 1, "default": 2},
-        "team_1": {"boss": 1},
+        "team_0": {"health": 1, "range": 1, "fast": 1, "default": 2},
+        "team_1": {"super": 1},
         "map": "empty",
     },
     "identical_10_vs_3": {
         "team_0": {"default": 10},
-        "team_1": {"boss": 3},
+        "team_1": {"super": 3},
         "map": "empty",
     },
     "special_10_vs_3": {
-        "team_0": {"tank": 3, "sniper": 3, "scout": 3, "default": 1},
-        "team_1": {"boss": 3},
+        "team_0": {"health": 3, "range": 3, "fast": 3, "default": 1},
+        "team_1": {"super": 3},
         "map": "empty",
     },
     "identical_20_vs_5": {
         "team_0": {"default": 20},
-        "team_1": {"boss": 5},
+        "team_1": {"super": 5},
         "map": "empty",
     },
     "special_20_vs_5": {
-        "team_0": {"tank": 5, "sniper": 5, "scout": 5, "default": 5},
-        "team_1": {"boss": 5},
+        "team_0": {"health": 5, "range": 5, "fast": 5, "default": 5},
+        "team_1": {"super": 5},
         "map": "empty",
     },
     "identical_20_vs_20_center_block": {

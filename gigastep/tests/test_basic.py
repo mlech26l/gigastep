@@ -161,8 +161,8 @@ def test_scenario_other_scenarios():
     run_test_scenario_vmapped("waypoint_5_vs_5")
     run_test_state_obs_scenario("waypoint_5_vs_5")
     run_test_state_obs_scenario("hide_and_seek_5_vs_5")
-    run_test_scenario_vmapped("waypoint_5_vs_5_det")
-    run_test_state_obs_scenario("identical_5_vs_5_det")
+    run_test_scenario_vmapped("waypoint_5_vs_3_fobs_rgb_maps_cont")
+    run_test_state_obs_scenario("identical_5_vs_1_fobs_vec_void_cont")
 
 
 if __name__ == "__main__":

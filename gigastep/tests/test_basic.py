@@ -166,7 +166,7 @@ def test_scenario_other_scenarios():
 
 
 if __name__ == "__main__":
-    test_scenario20v20_debug_reward()
     test_scenario20v20()
-    test_state_obs_scenario20v20()
-    test_vmap_scenario20v20()
+    # test_scenario20v20_debug_reward()
+    # test_state_obs_scenario20v20()
+    # test_vmap_scenario20v20()

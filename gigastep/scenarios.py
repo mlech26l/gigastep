@@ -13,7 +13,7 @@ class ScenarioBuilder:
         self._per_agent_damage_range = []
         self._per_agent_thrust = []
         self._per_agent_idle_reward = []
-        self._map = "all"
+        self._map = "empty"
         self._map_size = None
         self._kwargs = {}
 

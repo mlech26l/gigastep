@@ -134,7 +134,7 @@ _builtin_base_scenarios = {
             "reward_collision_obstacle": 10,
         },
     },
-    "hide_and_seek_5_vs_10": {
+    "hide_and_seek_10_vs_5": {
         "team_0": {"seeker": 5},
         "team_1": {"hider": 10},
         "kwargs": {

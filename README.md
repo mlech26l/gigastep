@@ -19,11 +19,11 @@ pip install -e .
 
 To install JAX with GPU support see [JAX installation instructions](https://github.com/google/jax#installation)
 
-Other required packages:
-- optax
-- flax
-- pygame
-- opencv-python
+For training or using the visualizer, you need to install the following packages:
+
+```bash
+pip install optax flax chex pygame opencv-python
+```
 
 ## ✨ Features
 
@@ -41,7 +41,7 @@ Other required packages:
 from gigastep import make_scenario
 import jax
 
-env = make_scenario("identical_20_vs_20")
+env = make_scenario("identical_5_vs_5_fobs_rgb_void_disc")
 rng = jax.random.PRNGKey(3)
 rng, key_reset = jax.random.split(rng, 2)
 
@@ -69,7 +69,7 @@ import jax
 import jax.numpy as jnp
 
 batch_size = 32
-env = make_scenario("identical_20_vs_20")
+env = make_scenario("identical_5_vs_5_fobs_rgb_void_disc")
 rng = jax.random.PRNGKey(3)
 rng, key_reset = jax.random.split(rng, 2)
 key_reset = jax.random.split(key_reset, batch_size)
@@ -92,29 +92,40 @@ while not jnp.all(ep_dones):
         states, obs = env.reset_done_episodes(state, obs, ep_dones, key)
 ```
 
-## 🎭 Scenarios (TODO: define scenarios)
+## 🎭 Scenarios 
 
-- 🚧 TODO: There should be a list of 10 to 20 built-in scenarios with different agent types and different
-The number of agents should be between 2 and 1000
-- 🚧 TODO: The ScenarioBuilder should allow defining maps
+Gigastep comes with 288 built-in scenarios. Each scenario is defined by the following parameters:
 
-### List of built-in scenarios
+- 4 different objectives ```waypoint```, ```hide_and_seek```, ```identical```, ```special```
+- Number of agents for team A and team B (e.g., ```5```, ```10```, ```20```)
+- Observability (fully observable ```fobs``` or partially observable ```pobs```)
+- Observation type (RGB ```rgb``` or feature vector ```vec```)
+- With or without obstacle maps (```void``` or ```maps```)
+- Discrete or continuous action space (```disc``` or ```cont```)
 
-| Scenario                 | Description                                                |
-|--------------------------|------------------------------------------------------------|
-| ```identical_20_vs_20``` | 20 default units per team                                  |
-| ```identical_10_vs_10``` | 10 default units per team                                  |
-| ```identical_5_vs_5```   | 5 default units per team                                   |
-| ```special_20_vs_20```   | 5 tank, 5 sniper, 5 scout, 5 default units per team        |
-| ```special_10_vs_10```   | 3 tank, 3 sniper, 3 scout, 1 default units per team        |
-| ```special_5_vs_5```     | 1 tank, 1 sniper, 1 scout, 2 default units per team        |
-| **Asymmetric teams**     |                                                            |
-| ```identical_20_vs_5```  | 20 default units vs 5 boss units                           |
-| ```identical_10_vs_3```  | 10 default units vs 3 boss units                           |
-| ```identical_5_vs_1```   | 5 default units vs 1 boss unit                             |
-| ```special_20_vs_5```    | 5 tank, 5 sniper, 5 scout, 5 default units vs 5 boss units |
-| ```special_10_vs_3```    | 3 tank, 3 sniper, 3 scout, 1 default units vs 3 boss units |
-| ```special_5_vs_1```     | 1 tank, 1 sniper, 1 scout, 2 default units vs 1 boss unit  |
+An example scenario is ```identical_5_vs_5_fobs_rgb_void_disc```.
+
+
+To get a full list of all built-in scenarios, use the ```list_scenarios``` function.
+
+```python
+from gigastep.scenarios import list_scenarios
+for scenario in list_scenarios():
+    print(scenario)
+```
+
+Here is a selection of scenarios:
+
+| Scenario                    | Description                                     |
+|-----------------------------|-------------------------------------------------|
+| ```identical_20_vs_20```    | 20 default units per team                       |
+| ```identical_5_vs_5```      | 5 default units per team                        |
+| ```special_20_vs_5```       | 20 default vs 5 special agents                  |
+| ```special_5_vs_3```        | 5 default vs 3 special agents                   |
+| ```waypoint_5_vs_5```       | 5 default vs 5 default agents chasing waypoints |
+| ```waypoint_5_vs_3```       | 5 default vs 3 faster agents chasing waypoints  |
+| ```hide_and_seek_5_vs_5```  | 5 hiding and 5 seeking agent                    |
+| ```hide_and_seek_10_vs_5``` | 10 hider and 5 seeking agents                   |
 
 
 ### Custom Scenario
@@ -129,8 +140,8 @@ def custom_3v1_scenario():
     builder.add_type(0, "default")
     builder.add_type(0, "default")
     
-    # add tank type agent to team zero
-    builder.add_type(0, "tank")
+    # add agent type with more health to team zero
+    builder.add_type(0, "more_health")
     
     # add new agent type with increased health and range to team one 
     builder.add(1,sprite=5, max_health=2, range=2)
@@ -141,9 +152,29 @@ env = custom_3v1_scenario()
 assert env.n_agents == 4
 ```
 
-## 🎬 Visualization (TODO)
+## 🎬 Visualization
 
-🚧 TODO
+Gigastep comes with a built-in viewer that can be used to visualize the environment.
+
+```python
+from gigastep import GigastepViewer, make_scenario
+viewer = GigastepViewer(84 * 4) # upscale by 4
+env = make_scenario("identical_5_vs_5_fobs_rgb_void_disc")
+rng = jax.random.PRNGKey(3)
+rng, key_reset = jax.random.split(rng, 2)
+
+ep_done = False
+state, obs = env.reset(key_reset)
+while not ep_done:
+    rng, key_action,key_step = jax.random.split(rng, 3)
+    action = jax.random.uniform(key_action, shape=(env.n_agents, 3), minval=-1, maxval=1)
+    state, obs, rewards, dones, ep_done = env.step(state, action, key_step)
+    viewer.draw(env, state, obs)
+```
+
+The viewer visualized the global information (e.g., the map, the waypoints, the agents).
+If the environment uses the RGB observation type, the viewer can also visualize the RGB observations by 
+passing the ```show_num_agents=N``` argument of the viewer's initialization function (where N is the number of agents to visualize).
 
 ## 📚 Documentation
 

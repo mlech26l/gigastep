@@ -104,8 +104,8 @@ class GigastepEnv:
         enable_waypoints=False,
         collision_range=0.4,
         collision_altitude=0.5,
-        limit_x=10,
-        limit_y=10,
+        limit_x=10,  # 10,
+        limit_y=10,  # 10,
         waypoint_size=0.6,
         resolution_x=84,
         resolution_y=84,
@@ -211,7 +211,7 @@ class GigastepEnv:
         self.n_teams = [n_ego_agents, n_opponents]
 
         self.limits = (limit_x, limit_y)
-        self.z_max = 10
+        self.z_max = 10  # 10
         self.resolution = (resolution_x, resolution_y)
         self.time_delta = 0.1
 
@@ -339,7 +339,16 @@ class GigastepEnv:
         }
         return next_state
 
-    # @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=(0,))
+    def get_action_reward(self, state, action):
+        if self.discrete_actions:
+            act = self.action_lut[action].reshape(3).astype(jnp.float32)
+        else:
+            act = action
+        act = jnp.clip(act, -1, 1)
+        return jnp.sum(act**2, axis=-1)
+
+    @partial(jax.jit, static_argnums=(0,))
     def step(self, states, actions, rng):
         v_step = jax.vmap(self._step_agents)
 
@@ -558,6 +567,10 @@ class GigastepEnv:
             reward = jnp.zeros(num_agents)
 
         reward = reward + self._per_agent_idle_reward
+
+
+        v_get_act_rew = jax.vmap(self.get_action_reward)
+        reward = reward - 1.e-2*v_get_act_rew(agent_states, actions)
 
         if self.reward_defeat_one_opponent > 0:
             reward_defeat_one_opponent = (

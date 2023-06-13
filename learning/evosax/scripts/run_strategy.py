@@ -37,8 +37,8 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_cfg, net_ty
     if net_type=="MLP":
         ### Ego
         network_ego = NetworkMapperGiga["MLP"](
-            num_hidden_units=256,
-            num_hidden_layers=2,
+            num_hidden_units=net_cfg["num_hidden_units"],
+            num_hidden_layers=net_cfg["num_hidden_layers"],
             num_output_units=output_dimensions,
             hidden_activation="relu",
             output_activation=output_activation,
@@ -52,8 +52,8 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_cfg, net_ty
 
         ### Ado
         network_ado = NetworkMapperGiga["MLP"](
-            num_hidden_units=256,
-            num_hidden_layers=2,
+            num_hidden_units=net_cfg["num_hidden_units"],
+            num_hidden_layers=net_cfg["num_hidden_layers"],
             num_output_units=output_dimensions,
             hidden_activation="relu",
             output_activation=output_activation,
@@ -156,7 +156,7 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_cfg, net_ty
         ### Ego
         network_ego = NetworkMapperGiga["LSTM_CNN"](
             # CNN
-            num_output_units_cnn=128,  # 64,
+            num_output_units_cnn=64,  # 64,
             depth_1=1,
             depth_2=1,
             features_1=32,
@@ -169,7 +169,7 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_cfg, net_ty
             num_hidden_units_cnn=64,
             output_activation_cnn="identity",
             # LSTM
-            num_hidden_units_lstm=64,
+            num_hidden_units_lstm=net_cfg["lstm_units"],
             num_output_units_lstm=output_dimensions,
             output_activation_lstm=output_activation,
         )
@@ -186,7 +186,7 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_cfg, net_ty
         ### Ado
         network_ado = NetworkMapperGiga["LSTM_CNN"](
             # CNN
-            num_output_units_cnn=128,  # 64,
+            num_output_units_cnn=64,  # 64,
             depth_1=1,
             depth_2=1,
             features_1=32,
@@ -199,7 +199,7 @@ def network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_cfg, net_ty
             num_hidden_units_cnn=64,
             output_activation_cnn="identity",
             # LSTM
-            num_hidden_units_lstm=64,
+            num_hidden_units_lstm=net_cfg["lstm_units"],
             num_output_units_lstm=output_dimensions,
             output_activation_lstm=output_activation,
         )
@@ -226,7 +226,7 @@ def run_gigastep_fitness(
   scenario_names: str = "identical_5_vs_5", 
   # strategy_name: str = ["OpenES"],
   alg_cfgs: dict = {},
-  network_types: str = "LSTM_CNN",
+  # network_types: str = "LSTM_CNN",
   net_cfgs: dict = {},
   env_cfgs: dict = {}
   ):
@@ -234,9 +234,9 @@ def run_gigastep_fitness(
     for scenario_name in scenario_names:
         for alg_cfg in alg_cfgs:
             for env_cfg in env_cfgs:
-                for network_type in network_types:
-                    for net_cfg in net_cfgs:
+                for net_cfg in net_cfgs:
 
+                    # try:
                         alg_cfg = copy.deepcopy(alg_cfg)
                         env_cfg = copy.deepcopy(env_cfg)
                 
@@ -244,6 +244,8 @@ def run_gigastep_fitness(
                         c_name = alg_cfg["config_name"]
                         e_name = env_cfg["config_name"]
                         n_name = net_cfg["config_name"]
+
+                        network_type = net_cfg["network_type"]
 
                         num_generations = 2000
                         evaluate_every_gen = 100
@@ -262,8 +264,8 @@ def run_gigastep_fitness(
                         train_team1 = True
                         train_team2 = False
 
-                        update_ado_freq = 50  # 100
-                        extend_ado_freq = 50  # 100
+                        update_ado_freq = 10  # 100
+                        extend_ado_freq = 10  # 100
                         max_old_params = 10
                         params_ado_buffer = deque(maxlen=max_old_params)
                         params_ego_buffer = deque(maxlen=max_old_params)
@@ -289,9 +291,20 @@ def run_gigastep_fitness(
 
                         rng = jax.random.PRNGKey(0)
 
+                        max_episode_length_train = env_cfg["max_episode_length_train"]
+                        max_episode_length_test = env_cfg["max_episode_length_test"]
+
                         del env_cfg["config_name"]
-                        train_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=False, n_devices=n_devices, env_cfg=env_cfg)
-                        test_evaluator = GigastepFitness(scenario_name, num_rollouts=20, test=True, n_devices=1, env_cfg=env_cfg)
+                        del env_cfg["max_episode_length_train"]
+                        del env_cfg["max_episode_length_test"]
+
+                        env_cfg_train = copy.deepcopy(env_cfg)
+                        env_cfg_train["max_episode_length"] = max_episode_length_train
+                        env_cfg_test = copy.deepcopy(env_cfg)
+                        env_cfg_test["max_episode_length"] = max_episode_length_test
+
+                        train_evaluator = GigastepFitness(scenario_name, num_rollouts=50, test=False, n_devices=n_devices, env_cfg=env_cfg_train)
+                        test_evaluator = GigastepFitness(scenario_name, num_rollouts=50, test=True, n_devices=1, env_cfg=env_cfg_test)
 
                         # Initialize network depending on type
                         out = network_setup(train_evaluator, test_evaluator, rng, env_cfg, net_cfg, net_type=network_type)
@@ -306,7 +319,9 @@ def run_gigastep_fitness(
                             strategy_params = alg_cfg["strategy"]
                         else:
                             strategy_params = {}
-                        strategy_params["centered_rank"] = True
+                        strategy_params["centered_rank"] = True  # True
+                        # strategy_params["z_score"] = False
+                        # strategy_params["norm_range"] = True
                         # strategy_params["popsize"] = 512  # 512  # 32
                         # # strategy_params["mean_decay"] = 1.e-2
                         # # if s_name=="DES":
@@ -389,7 +404,7 @@ def run_gigastep_fitness(
 
                                 if log_tensorboard:
                                     ### Video
-                                    id_prm = 0
+                                    id_prm = 1
                                     id_run = 0
                                     id_ego = 0
                                     frames_glb = np.array(test_images_global[id_prm, id_run])
@@ -398,7 +413,7 @@ def run_gigastep_fitness(
                                     frames_glb = np.expand_dims(frames_glb, axis=0)      # (N, T, C, W, H)
                                     writer.add_video("test/video-all", frames_glb, global_step=gen, fps=15)
                                 
-                                test_return_to_log = test_scores_ego[0]
+                                test_return_to_log = test_scores_ego[1]
                                 log_steps.append(train_evaluator.total_env_steps)
                                 log_return.append(test_return_to_log)
                                 t.set_description(f"R: " + "{:.3f}".format(test_return_to_log.item()))
@@ -456,6 +471,14 @@ def run_gigastep_fitness(
                             else:
                                 scores_ego, scores_ado, act_info = train_returns
                                 reward_info = None
+
+                            # x_ego = jnp.repeat(x_ego[:, None], repeats=int(scores_ego.shape[0]/x_ego.shape[0]), axis=1)
+                            # x_ego = x_ego.reshape((-1, x_ego.shape[-1]))
+                            # scores_ego = scores_ego.reshape((-1))
+                            # x_ado = jnp.repeat(x_ado[:, None], repeats=int(scores_ado.shape[0]/x_ado.shape[0]), axis=1)
+                            # x_ado = x_ado.reshape((-1, x_ado.shape[-1]))
+                            # scores_ado = scores_ado.reshape((-1))
+                            
                             if train_team1:
                                 es_ego_state = strategy_ego.tell(x_ego, scores_ego, es_ego_state)
                             elif train_team2:
@@ -511,7 +534,7 @@ def run_gigastep_fitness(
 
                             if log_tensorboard:
                                 ### Video
-                                id_prm = 0
+                                id_prm = 1
                                 id_run = 0
                                 id_ego = 0
                                 frames_glb = np.array(test_images_global[id_prm, id_run])
@@ -520,11 +543,14 @@ def run_gigastep_fitness(
                                 frames_glb = np.expand_dims(frames_glb, axis=0)      # (N, T, C, W, H)
                                 writer.add_video("test/video-all", frames_glb, global_step=gen, fps=15)
                         
-                        test_return_to_log = test_scores_ego[0]
+                        test_return_to_log = test_scores_ego[1]
                         log_steps.append(train_evaluator.total_env_steps)
                         log_return.append(test_return_to_log)
                         t.set_description(f"R: " + "{:.3f}".format(test_return_to_log.item()))
                         t.refresh()
+
+                    # except:
+                    #     pass
         
 
 if __name__ == "__main__":
@@ -548,34 +574,188 @@ if __name__ == "__main__":
     env_cfg0["use_stochastic_comm"] = False
     env_cfg0["max_agent_in_vec_obs"] = 100
     env_cfg0["debug_reward"] = False
-    env_cfg0["max_episode_length"] = 500
+    env_cfg0["max_episode_length_train"] = 500
+    env_cfg0["max_episode_length_test"] = 500
+    env_cfg0["maps"] = "empty"
     # Config 1
     env_cfg1 = copy.deepcopy(env_cfg0)
     env_cfg1["config_name"] = "config1"
-    env_cfg1["max_episode_length"] = 200
+    env_cfg1["max_episode_length_train"] = 200
     # Config 2
     env_cfg2 = copy.deepcopy(env_cfg0)
     env_cfg2["config_name"] = "config2"
-    env_cfg2["max_episode_length"] = 100
+    env_cfg2["max_episode_length_train"] = 100
     # Config 3
     env_cfg3 = copy.deepcopy(env_cfg0)
     env_cfg3["config_name"] = "config3"
-    env_cfg3["max_episode_length"] = 50
+    env_cfg3["max_episode_length_train"] = 50
+    # Config 4
+    env_cfg4 = copy.deepcopy(env_cfg0)
+    env_cfg4["config_name"] = "config4"
+    env_cfg4["max_episode_length_train"] = 256
+    env_cfg4["reward_game_won"] = 10.0
+    env_cfg4["reward_defeat_one_opponent"] = 2.0
+    env_cfg4["reward_collision_obstacle"] = 1.0
+    env_cfg4["reward_collision_agent"] = 0.5
+    env_cfg4["reward_damage"] = 0.1
+    # Config 5
+    env_cfg5 = copy.deepcopy(env_cfg0)
+    env_cfg5["config_name"] = "config5"
+    env_cfg5["max_episode_length_train"] = 256
+    env_cfg5["reward_game_won"] = 100.0
+    env_cfg5["reward_defeat_one_opponent"] = 10.0
+    env_cfg5["reward_collision_obstacle"] = 1.0
+    env_cfg5["reward_collision_agent"] = 0.5
+    env_cfg5["reward_damage"] = 0.1
+    # Config 6
+    env_cfg6 = copy.deepcopy(env_cfg0)
+    env_cfg6["config_name"] = "config6"
+    env_cfg6["max_episode_length_train"] = 256
+    env_cfg6["reward_game_won"] = 100.0
+    env_cfg6["reward_defeat_one_opponent"] = 10.0
+    env_cfg6["reward_collision_obstacle"] = 0.0
+    env_cfg6["reward_collision_agent"] = 0.0
+    env_cfg6["reward_damage"] = 0.0
+    # Config 7
+    env_cfg7 = copy.deepcopy(env_cfg0)
+    env_cfg7["config_name"] = "config7"
+    env_cfg7["max_episode_length_train"] = 256
+    env_cfg7["reward_game_won"] = 0.0
+    env_cfg7["reward_defeat_one_opponent"] = 1.0
+    env_cfg7["reward_collision_obstacle"] = 0.0
+    env_cfg7["reward_collision_agent"] = 0.0
+    env_cfg7["reward_damage"] = 0.0
+    # Config 8
+    env_cfg8 = copy.deepcopy(env_cfg0)
+    env_cfg8["config_name"] = "config8"
+    env_cfg8["max_episode_length_train"] = 128
+    env_cfg8["reward_game_won"] = 0.0
+    env_cfg8["reward_defeat_one_opponent"] = 1.0
+    env_cfg8["reward_collision_obstacle"] = 0.0
+    env_cfg8["reward_collision_agent"] = 0.0
+    env_cfg8["reward_damage"] = 0.0
+    # Config 9
+    env_cfg9 = copy.deepcopy(env_cfg0)
+    env_cfg9["config_name"] = "config9"
+    env_cfg9["max_episode_length_train"] = 32
+    env_cfg9["reward_game_won"] = 0.0
+    env_cfg9["reward_defeat_one_opponent"] = 10.0
+    env_cfg9["reward_collision_obstacle"] = 0.0
+    env_cfg9["reward_collision_agent"] = 0.0
+    env_cfg9["reward_damage"] = 0.0
+    # Config 10
+    env_cfg10 = copy.deepcopy(env_cfg0)
+    env_cfg10["config_name"] = "config10"
+    env_cfg10["max_episode_length_train"] = 50
+    env_cfg10["reward_game_won"] = 0.0
+    env_cfg10["reward_defeat_one_opponent"] = 10.0
+    env_cfg10["reward_collision_obstacle"] = 0.0
+    env_cfg10["reward_collision_agent"] = 0.0
+    env_cfg10["reward_damage"] = 0.0
+    env_cfg10["discrete_actions"] = False
+    # Config 11
+    env_cfg11 = copy.deepcopy(env_cfg0)
+    env_cfg11["config_name"] = "config11"
+    env_cfg11["max_episode_length_train"] = 50
+    env_cfg11["reward_game_won"] = 0.0
+    env_cfg11["reward_defeat_one_opponent"] = 10.0
+    env_cfg11["reward_collision_obstacle"] = 0.1
+    env_cfg11["reward_collision_agent"] = 0.0
+    env_cfg11["reward_damage"] = 0.0
+    env_cfg11["discrete_actions"] = False
+    # Config 12
+    env_cfg12 = copy.deepcopy(env_cfg0)
+    env_cfg12["config_name"] = "config12"
+    env_cfg12["max_episode_length_train"] = 50
+    env_cfg12["reward_game_won"] = 0.0
+    env_cfg12["reward_defeat_one_opponent"] = 10.0
+    env_cfg12["reward_collision_obstacle"] = 0.1
+    env_cfg12["reward_collision_agent"] = 0.0
+    env_cfg12["reward_damage"] = 0.0
+    env_cfg12["discrete_actions"] = False
+    env_cfg12["obs_type"] = "rgb"
+    # Config 13
+    env_cfg13 = copy.deepcopy(env_cfg0)
+    env_cfg13["config_name"] = "config13"
+    env_cfg13["max_episode_length_train"] = 50
+    env_cfg13["reward_game_won"] = 0.0
+    env_cfg13["reward_defeat_one_opponent"] = 10.0
+    env_cfg13["reward_collision_obstacle"] = 0.1
+    env_cfg13["reward_collision_agent"] = 0.0
+    env_cfg13["reward_detection"] = 0.1
+    env_cfg13["reward_damage"] = 0.0
+    env_cfg13["discrete_actions"] = False
+    env_cfg13["obs_type"] = "vector"
+    # Config 14
+    env_cfg14 = copy.deepcopy(env_cfg0)
+    env_cfg14["config_name"] = "config14"
+    env_cfg14["max_episode_length_train"] = 100
+    env_cfg14["reward_game_won"] = 0.0
+    env_cfg14["reward_defeat_one_opponent"] = 10.0
+    env_cfg14["reward_collision_obstacle"] = 1.0
+    env_cfg14["reward_collision_agent"] = 0.0
+    env_cfg14["reward_detection"] = 0.1
+    env_cfg14["reward_damage"] = 0.0
+    env_cfg14["discrete_actions"] = False
+    env_cfg14["obs_type"] = "vector"
+    # Config 15
+    env_cfg15 = copy.deepcopy(env_cfg0)
+    env_cfg15["config_name"] = "config15"
+    env_cfg15["max_episode_length_train"] = 50
+    env_cfg15["reward_game_won"] = 0.0
+    env_cfg15["reward_defeat_one_opponent"] = 10.0
+    env_cfg15["reward_collision_obstacle"] = 1.0
+    env_cfg15["reward_collision_agent"] = 0.0
+    env_cfg15["reward_detection"] = 0.1
+    env_cfg15["reward_damage"] = 0.0
+    env_cfg15["discrete_actions"] = False
+    env_cfg15["obs_type"] = "vector"
+    # Config 16
+    env_cfg16 = copy.deepcopy(env_cfg0)
+    env_cfg16["config_name"] = "config16"
+    env_cfg16["max_episode_length_train"] = 100
+    env_cfg16["reward_game_won"] = 0.0
+    env_cfg16["reward_defeat_one_opponent"] = 10.0
+    env_cfg16["reward_collision_obstacle"] = 0.1
+    env_cfg16["reward_collision_agent"] = 0.0
+    env_cfg16["reward_detection"] = 0.1
+    env_cfg16["reward_damage"] = 0.0
+    env_cfg16["discrete_actions"] = False
+    env_cfg16["obs_type"] = "vector"
 
     ### Network config
-    ### LSTM
     # Base Config
     net_cfg0 = {}
     net_cfg0["config_name"] = "config0"
+    net_cfg0["network_type"] = "LSTM"
     net_cfg0["lstm_units"] = 32
     # Config 1
     net_cfg1 = copy.deepcopy(net_cfg0)
     net_cfg1["config_name"] = "config1"
+    net_cfg1["network_type"] = "LSTM"
     net_cfg1["lstm_units"] = 16
     # Config 2
     net_cfg2 = copy.deepcopy(net_cfg0)
     net_cfg2["config_name"] = "config2"
+    net_cfg2["network_type"] = "LSTM"
     net_cfg2["lstm_units"] = 64
+    # Config3
+    net_cfg3 = copy.deepcopy(net_cfg0)
+    net_cfg3["config_name"] = "config3"
+    net_cfg3["network_type"] = "MLP"
+    net_cfg3["num_hidden_units"] = 100
+    net_cfg3["num_hidden_layers"] = 1
+    # Config4
+    net_cfg4 = copy.deepcopy(net_cfg0)
+    net_cfg4["config_name"] = "config4"
+    net_cfg4["network_type"] = "MLP"
+    net_cfg4["num_hidden_units"] = 64
+    net_cfg4["num_hidden_layers"] = 2
+    # Config 5
+    net_cfg5 = copy.deepcopy(net_cfg0)
+    net_cfg5["config_name"] = "config5"
+    net_cfg5["network_type"] = "LSTM_CNN"
+    net_cfg5["lstm_units"] = 32
 
     # ### Algorithm config
     ### DES
@@ -752,10 +932,14 @@ if __name__ == "__main__":
     alg_openes_cfg4 = copy.deepcopy(alg_openes_cfg0)
     alg_openes_cfg4["config_name"] = "config4"
     alg_openes_cfg4["strategy"]["sigma_init"] = 1.0
-    # # Config 5
-    # alg_cfg5 = copy.deepcopy(alg_cfg)
-    # alg_cfg5["config_name"] = "config5"
-    # alg_cfg5["strategy"]["popsize"] = 1024
+    # Config 5
+    alg_openes_cfg5 = copy.deepcopy(alg_openes_cfg0)
+    alg_openes_cfg5["config_name"] = "config5"
+    alg_openes_cfg5["strategy"]["popsize"] = 1024
+    # Config 6
+    alg_openes_cfg6 = copy.deepcopy(alg_openes_cfg0)
+    alg_openes_cfg6["config_name"] = "config6"
+    alg_openes_cfg6["strategy"]["popsize"] = 128
 
     ### CMA-ES
     # Base Config
@@ -789,6 +973,42 @@ if __name__ == "__main__":
     params_cfg = {}
     alg_pgpe_cfg0["strategy"] = strategy_cfg
     alg_pgpe_cfg0["params"] = params_cfg
+    # Config 1
+    alg_pgpe_cfg1 = copy.deepcopy(alg_pgpe_cfg0)
+    alg_pgpe_cfg1["config_name"] = "config1"
+    alg_pgpe_cfg1["strategy"]["popsize"] = 32
+    alg_pgpe_cfg1["strategy"]["lrate_init"] = 0.01
+    alg_pgpe_cfg1["params"]["sigma_lrate"] = 0.05
+    # Config 2
+    alg_pgpe_cfg2 = copy.deepcopy(alg_pgpe_cfg0)
+    alg_pgpe_cfg2["config_name"] = "config2"
+    alg_pgpe_cfg2["strategy"]["popsize"] = 2048
+    alg_pgpe_cfg2["strategy"]["lrate_init"] = 0.01
+    alg_pgpe_cfg2["params"]["sigma_lrate"] = 0.05
+    # Config 3
+    alg_pgpe_cfg3 = copy.deepcopy(alg_pgpe_cfg0)
+    alg_pgpe_cfg3["config_name"] = "config3"
+    alg_pgpe_cfg3["strategy"]["popsize"] = 64
+    alg_pgpe_cfg3["strategy"]["lrate_init"] = 0.01
+    alg_pgpe_cfg3["params"]["sigma_lrate"] = 0.05
+    # Config 4
+    alg_pgpe_cfg4 = copy.deepcopy(alg_pgpe_cfg0)
+    alg_pgpe_cfg4["config_name"] = "config4"
+    alg_pgpe_cfg4["strategy"]["popsize"] = 64
+    alg_pgpe_cfg4["strategy"]["lrate_init"] = 0.1
+    alg_pgpe_cfg4["params"]["sigma_lrate"] = 0.5
+    # Config 5
+    alg_pgpe_cfg5 = copy.deepcopy(alg_pgpe_cfg0)
+    alg_pgpe_cfg5["config_name"] = "config5"
+    alg_pgpe_cfg5["strategy"]["popsize"] = 64
+    alg_pgpe_cfg5["strategy"]["lrate_init"] = 0.001
+    alg_pgpe_cfg5["params"]["sigma_lrate"] = 0.005
+    # Config 6
+    alg_pgpe_cfg6 = copy.deepcopy(alg_pgpe_cfg0)
+    alg_pgpe_cfg6["config_name"] = "config6"
+    alg_pgpe_cfg6["strategy"]["popsize"] = 64
+    alg_pgpe_cfg6["strategy"]["lrate_init"] = 0.001
+    alg_pgpe_cfg6["params"]["sigma_lrate"] = 0.05
 
     ### SimpleGA
     # Base Config
@@ -800,6 +1020,108 @@ if __name__ == "__main__":
     params_cfg = {}
     alg_simplega_cfg0["strategy"] = strategy_cfg
     alg_simplega_cfg0["params"] = params_cfg
+
+    ### PersistentES
+    # Base Config
+    alg_persistentes_cfg0 = {}
+    alg_persistentes_cfg0["strategy_name"] = "PersistentES"
+    alg_persistentes_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_persistentes_cfg0["strategy"] = strategy_cfg
+    alg_persistentes_cfg0["params"] = params_cfg
+
+    ### ARS
+    # Base Config
+    alg_ars_cfg0 = {}
+    alg_ars_cfg0["strategy_name"] = "ARS"
+    alg_ars_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_ars_cfg0["strategy"] = strategy_cfg
+    alg_ars_cfg0["params"] = params_cfg
+
+    ### GESMR GA
+    # Base Config
+    alg_gesmrga_cfg0 = {}
+    alg_gesmrga_cfg0["strategy_name"] = "GESMR_GA"
+    alg_gesmrga_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_gesmrga_cfg0["strategy"] = strategy_cfg
+    alg_gesmrga_cfg0["params"] = params_cfg
+
+
+    ### GuidedES
+    # Base Config
+    alg_guidedes_cfg0 = {}
+    alg_guidedes_cfg0["strategy_name"] = "GuidedES"
+    alg_guidedes_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_guidedes_cfg0["strategy"] = strategy_cfg
+    alg_guidedes_cfg0["params"] = params_cfg
+
+    ### SNES
+    # Base Config
+    alg_snes_cfg0 = {}
+    alg_snes_cfg0["strategy_name"] = "SNES"
+    alg_snes_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_snes_cfg0["strategy"] = strategy_cfg
+    alg_snes_cfg0["params"] = params_cfg
+    # Config 1
+    alg_snes_cfg1 = copy.deepcopy(alg_snes_cfg0)
+    alg_snes_cfg1["config_name"] = "config1"
+    alg_snes_cfg1["strategy"]["temperature"] = 12.0
+    # Config 2
+    alg_snes_cfg2 = copy.deepcopy(alg_snes_cfg0)
+    alg_snes_cfg2["config_name"] = "config2"
+    alg_snes_cfg2["strategy"]["popsize"] = 128
+    # Config 3
+    alg_snes_cfg3 = copy.deepcopy(alg_snes_cfg0)
+    alg_snes_cfg3["config_name"] = "config3"
+    alg_snes_cfg3["strategy"]["popsize"] = 64
+
+    ### SAMR GA
+    # Base Config
+    alg_samrga_cfg0 = {}
+    alg_samrga_cfg0["strategy_name"] = "SAMR_GA"
+    alg_samrga_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_samrga_cfg0["strategy"] = strategy_cfg
+    alg_samrga_cfg0["params"] = params_cfg
+
+    ### xNES
+    # Base Config
+    alg_xnes_cfg0 = {}
+    alg_xnes_cfg0["strategy_name"] = "xNES"
+    alg_xnes_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_xnes_cfg0["strategy"] = strategy_cfg
+    alg_xnes_cfg0["params"] = params_cfg
+
+    ### GLD
+    # Base Config
+    alg_gld_cfg0 = {}
+    alg_gld_cfg0["strategy_name"] = "GLD"
+    alg_gld_cfg0["config_name"] = "config0"
+    strategy_cfg = {}
+    strategy_cfg["popsize"] = 512
+    params_cfg = {}
+    alg_gld_cfg0["strategy"] = strategy_cfg
+    alg_gld_cfg0["params"] = params_cfg
+
 
 
     scenario_names = [
@@ -823,6 +1145,9 @@ if __name__ == "__main__":
         # "identical_5_vs_5_center_block",
         # "identical_2_vs_2_center_block",
         # "identical_5_vs_5_two_rooms1",
+        # "waypoint_5_vs_5",
+        # "hide_and_seek_5_vs_5",
+        # "identical_1_vs_1",
     ]
 
 
@@ -844,33 +1169,69 @@ if __name__ == "__main__":
             # alg_des_cfg21,
             # alg_des_cfg22,
             # alg_des_cfg23,
-            # alg_des_cfg24,
-            # alg_des_cfg25,
-            # alg_des_cfg26,
-            # alg_des_cfg27,
-            # alg_des_cfg28,
-            # alg_des_cfg29,
+            # # alg_des_cfg24,
+            # # alg_des_cfg25,
+            # # alg_des_cfg26,
+            # # alg_des_cfg27,
+            # # alg_des_cfg28,
+            # # alg_des_cfg29,
             # alg_openes_cfg0,
-            # alg_openes_cfg1,
-            # alg_openes_cfg2,
-            # alg_openes_cfg3,
+            # # alg_openes_cfg1,
+            # # alg_openes_cfg2,
+            # # alg_openes_cfg3,
             # alg_openes_cfg4,
+            # # alg_openes_cfg5,
+            # # alg_openes_cfg6,
             # alg_crfmnes_cfg0,
             # alg_pgpe_cfg0,
+            # alg_pgpe_cfg1,
+            # alg_pgpe_cfg2,
+            alg_pgpe_cfg3,
+            # alg_pgpe_cfg4,
+            # alg_pgpe_cfg5,
+            # alg_pgpe_cfg6,
             # alg_cmaes_cfg0,
-            alg_simplega_cfg0,
+            # alg_simplega_cfg0,
+            # alg_persistentes_cfg0,
+            # alg_ars_cfg0,
+            # alg_gesmrga_cfg0,
+            # alg_guidedes_cfg0,
+            # alg_snes_cfg0,
+            # # alg_snes_cfg1,
+            # # alg_snes_cfg2,
+            # # alg_snes_cfg3,
+            # alg_samrga_cfg0,
+            # alg_xnes_cfg0,
+            # alg_gld_cfg0,
+
         ],
-        network_types=["LSTM"],  # "LSTM",
+        # network_types=["LSTM"],  # "LSTM",
         net_cfgs = [
             net_cfg0,
             # net_cfg1,
             # net_cfg2,
+            # net_cfg3,
+            # net_cfg4,
+            # net_cfg5,
         ],
         env_cfgs=[
             # env_cfg3,
-            env_cfg2,
+            # env_cfg2,
             # env_cfg1,
             # env_cfg0,
+            # env_cfg4,
+            # env_cfg5,
+            # env_cfg6,
+            # env_cfg7,
+            # env_cfg8,
+            # env_cfg9,
+            # env_cfg10,
+            # env_cfg11,
+            # env_cfg12,
+            # env_cfg13,
+            # env_cfg14,
+            env_cfg15,
+            env_cfg16,
         ])
     t_end = time.time()
     print("Runtime = " + str(round(t_end-t_start, 3)))

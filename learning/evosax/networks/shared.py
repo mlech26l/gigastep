@@ -49,12 +49,12 @@ def tanh_gaussian_out(
     x_log_var = nn.Dense(
         features=num_output_units,  # 1,
         kernel_init=kernel_init_fn[init_type](),
-        bias_init=default_bias_init(scale=1.0),
+        bias_init=default_bias_init(),  # scale=1.0),
     )(x)
-    x_std = jnp.exp(0.5 * x_log_var)
+    x_std = 0.3 * jnp.exp(0.5 * x_log_var)
     noise = x_std * jax.random.normal(rng, (num_output_units,))
     info = {}
     info['act_mean'] = x_mean
     info['act_stdv'] = noise
-    # return 1.1*nn.tanh(x_mean) + noise, info
-    return x_mean + noise, info
+    return 1.1*nn.tanh(x_mean) + noise, info
+    # return x_mean + noise, info

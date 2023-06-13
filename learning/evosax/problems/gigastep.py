@@ -74,18 +74,24 @@ class GigastepFitness(object):
         out_rollout_map = jax.pmap(self.rollout_pop)(
             keys_pmap, ego_policy_params, ado_policy_params
         )
-        rew_re = out_rollout_map[0].reshape(-1, self.num_rollouts)
-        steps_re = out_rollout_map[1].reshape(-1, self.num_rollouts)  # NOTE: weird shape, but will only be summed
+        scores_ego = out_rollout_map[0].reshape(-1, self.num_rollouts)
+        scores_ado = out_rollout_map[1].reshape(-1, self.num_rollouts)
+        steps_re = out_rollout_map[2].reshape(-1, self.num_rollouts)  # NOTE: weird shape, but will only be summed
         if self.test:
-            images_global_re = out_rollout_map[2][0]  # NOTE: 1st device
-            out_rollout = rew_re, steps_re, images_global_re
+            images_global_re = out_rollout_map[3][0]  # NOTE: 1st device
+            out_rollout = scores_ego, scores_ado, steps_re, images_global_re
         else:
-            out_rollout = rew_re, steps_re
+            out_rollout = scores_ego, scores_ado, steps_re
         if self.debug_reward:
-            reward_info = out_rollout_map[-1]
+            reward_info = out_rollout_map[-2]
             reward_info = {k: v.mean() for k, v in reward_info.items()}
             out_rollout = *out_rollout, reward_info
-            
+
+
+        act_info = out_rollout_map[-1]
+        act_info = {k: v.mean() for k, v in act_info.items()}
+        out_rollout = *out_rollout, act_info
+                    
         # rew_re = rew_dev.reshape(-1, self.num_rollouts)
         # steps_re = steps_dev.reshape(-1, self.num_rollouts)
         return out_rollout
@@ -102,9 +108,9 @@ class GigastepFitness(object):
         # Update total step counter using only transitions before termination of all ego team agents
         self.total_env_steps += masks[..., :self.ego_team_size].sum(axis=-2).max(axis=-1).sum()
         if self.test:
-            out_rollout = scores_ego.mean(axis=-1), scores_ado.mean(axis=-1), images_global
+            out_rollout = scores_ego.mean(axis=1), scores_ado.mean(axis=1), images_global
         else:
-            out_rollout = scores_ego.mean(axis=-1), scores_ado.mean(axis=-1),
+            out_rollout = scores_ego.mean(axis=1), scores_ado.mean(axis=1),
         if self.debug_reward:
             reward_info = out_rollout_map[-2]
             reward_info = {k: v.mean() for k, v in reward_info.items()}
@@ -141,8 +147,8 @@ class GigastepFitness(object):
             next_o_global = self.env.get_global_observation(next_s)
 
             # reward = reward[..., :self.ego_team_size].mean(axis=-1)  # FIXME: mean over all agent reward [testing, not desired]
-            new_cum_reward_ego = cum_reward_ego + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
-            new_cum_reward_ado = cum_reward_ado + (reward * valid_mask)[..., self.ego_team_size:].mean(axis=-1)
+            new_cum_reward_ego = cum_reward_ego + (reward * valid_mask)[..., :self.ego_team_size]  # .mean(axis=-1)
+            new_cum_reward_ado = cum_reward_ado + (reward * valid_mask)[..., self.ego_team_size:]  # .mean(axis=-1)
             new_valid_mask = valid_mask * (1 - dones)
             carry = [
                 next_o.squeeze(),
@@ -173,8 +179,8 @@ class GigastepFitness(object):
                 ego_policy_params,
                 ado_policy_params,
                 rng_episode,
-                jnp.array([0.0]),
-                jnp.array([0.0]),
+                jnp.zeros(shape=(self.ego_team_size,)),  # jnp.array([0.0]),
+                jnp.zeros(shape=(self.ado_team_size,)),  # jnp.array([0.0]),
                 jnp.ones((obs.shape[0],)),
             ],
             (),
@@ -193,8 +199,10 @@ class GigastepFitness(object):
             out_scan = (*out_scan, reward_info)
         act_info = {k: v.mean(axis=(0, 1)) for k, v in scan_out[-1].items()}
         out_scan = (*out_scan, act_info)
-        cum_return_ego = carry_out[-3].squeeze()
-        cum_return_ado = carry_out[-2].squeeze()
+        cum_return_ego = carry_out[-3].mean(axis=-1).squeeze()
+        cum_return_ado = carry_out[-2].mean(axis=-1).squeeze()
+        # cum_return_ego = carry_out[-3]
+        # cum_return_ado = carry_out[-2]
         return cum_return_ego, cum_return_ado, *out_scan
 
     def rollout_rnn(
@@ -237,8 +245,8 @@ class GigastepFitness(object):
 
             next_o_global = self.env.get_global_observation(next_s)
 
-            new_cum_reward_ego = cum_reward_ego + (reward * valid_mask)[..., :self.ego_team_size].mean(axis=-1)
-            new_cum_reward_ado = cum_reward_ado + (reward * valid_mask)[..., self.ego_team_size:].mean(axis=-1)
+            new_cum_reward_ego = cum_reward_ego + (reward * valid_mask)[..., :self.ego_team_size]  # .mean(axis=-1)
+            new_cum_reward_ado = cum_reward_ado + (reward * valid_mask)[..., self.ego_team_size:]  # .mean(axis=-1)
             new_valid_mask = valid_mask * (1 - dones)
             carry = [
                 next_o.squeeze(),
@@ -273,8 +281,8 @@ class GigastepFitness(object):
                 rng,
                 hidden_ego,
                 hidden_ado,
-                jnp.array([0.0]),
-                jnp.array([0.0]),
+                jnp.zeros(shape=(self.ego_team_size,)),  # jnp.array([0.0]),
+                jnp.zeros(shape=(self.ado_team_size,)),  # jnp.array([0.0]),
                 jnp.ones((obs.shape[0],)),
             ],
             (),
@@ -293,6 +301,8 @@ class GigastepFitness(object):
             out_scan = (*out_scan, reward_info)
         act_info = {k: v.mean(axis=(0, 1)) for k, v in scan_out[-1].items()}
         out_scan = (*out_scan, act_info)
-        cum_return_ego = carry_out[-3].squeeze()
-        cum_return_ado = carry_out[-2].squeeze()
+        # cum_return_ego = jax.nn.leaky_relu(carry_out[-3]).mean(axis=-1).squeeze()  # .squeeze()
+        # cum_return_ado = jax.nn.leaky_relu(carry_out[-2]).mean(axis=-1).squeeze()  # .squeeze()
+        cum_return_ego = carry_out[-3].mean(axis=-1).squeeze()  # .squeeze()
+        cum_return_ado = carry_out[-2].mean(axis=-1).squeeze()  # .squeeze()
         return cum_return_ego, cum_return_ado, *out_scan

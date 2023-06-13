@@ -65,6 +65,8 @@ class LSTM_CNN(nn.Module):
         rng: Optional[chex.PRNGKey] = None,
     ) -> Tuple[Tuple[chex.ArrayTree, chex.ArrayTree], chex.Array]:
 
+        info = {}
+
         rng_cnn, rng_lstm = jax.random.split(rng, 2)
 
         # Encode observation
@@ -89,10 +91,10 @@ class LSTM_CNN(nn.Module):
                 rng_lstm, x, self.num_output_units_lstm, self.kernel_init_type_lstm
             )
         elif self.output_activation_lstm == "tanh_gaussian":
-            x = tanh_gaussian_out(
+            x, info = tanh_gaussian_out(
                 rng_lstm, x, self.num_output_units_lstm, self.kernel_init_type_lstm
             )
-        return lstm_state, x
+        return lstm_state, x, info
 
     def initialize_carry(self, batch_dims=()) -> Tuple[chex.ArrayTree, chex.ArrayTree]:
         """Initialize hidden state of LSTM."""

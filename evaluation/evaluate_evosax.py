@@ -83,6 +83,7 @@ if __name__ == "__main__":
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig10_envconfig2_lstmconfig0/23_06_05_11_00_37/ego_log_iter_2000",
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig20_envconfig2_lstmconfig0/23_06_05_11_10_04/ego_log_iter_2000",
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig22_envconfig2_lstmconfig0/23_06_05_11_19_19/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig23_envconfig2_lstmconfig0/23_06_05_10_50_26/log_iter_0",
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig23_envconfig2_lstmconfig0/23_06_05_10_50_26/log_iter_200",
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig23_envconfig2_lstmconfig0/23_06_05_10_50_26/log_iter_400",
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig23_envconfig2_lstmconfig0/23_06_05_10_50_26/log_iter_600",
@@ -93,15 +94,125 @@ if __name__ == "__main__":
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig23_envconfig2_lstmconfig0/23_06_05_10_50_26/log_iter_1600",
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig23_envconfig2_lstmconfig0/23_06_05_10_50_26/log_iter_2000",
                 # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig27_envconfig2_lstmconfig0/23_06_05_11_28_34/ego_log_iter_2000",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_200",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_400",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_600",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_800",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1000",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1200",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1400",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1600",
-                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_1600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/des/identical_5_vs_5/algconfig28_envconfig2_lstmconfig0/23_06_05_11_37_49/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/ars/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_22_04/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/ars/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_22_04/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gesmr_ga/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_23_54/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gesmr_ga/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_23_54/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gld/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_23_11_20/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gld/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_23_11_20/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/guidedes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_30_09/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/guidedes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_30_09/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/persistentes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_21_38/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/persistentes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_16_21_38/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/samr_ga/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_19_04_01/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/samr_ga/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_19_04_01/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/simplega/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_15_56_59/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/simplega/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_15_56_59/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_17_46_57/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_17_46_57/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/xnes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_20_44_18/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/xnes/identical_5_vs_5/algconfig0_envconfig2_lstmconfig0/23_06_05_20_44_18/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/ars/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_31_19/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/ars/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_31_19/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gesmr_ga/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_33_14/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gesmr_ga/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_33_14/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gld/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_23_20_36/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/gld/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_23_20_36/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/guidedes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_39_28/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/guidedes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_39_28/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/persistentes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_30_56/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/persistentes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_16_30_56/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/samr_ga/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_19_13_18/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/samr_ga/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_19_13_18/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/simplega/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_15_56_05/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/simplega/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_15_56_05/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/xnes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_21_16_54/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/xnes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_21_16_54/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_1000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_1200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_1400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_1600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_1800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig0_envconfig1_lstmconfig0/23_06_05_17_56_14/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_0",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_1000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_1200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_1400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_1600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_1800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_1000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_1200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_1400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_1600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_1800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/snes/identical_5_vs_5/algconfig1_envconfig2_lstmconfig0/23_06_06_06_06_03/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_1000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_1200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_1400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_1600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_1800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ego_log_iter_2000",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_0",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_200",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_400",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_600",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_800",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_1000",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_1200",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_1400",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_1600",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_1800",
+                "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ego_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_0",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_1000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_1200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_1400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_1600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_1800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig3_envconfig2_lstmconfig0/23_06_06_10_48_33/ado_log_iter_2000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_0",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_1000",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_1200",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_1400",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_1600",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_1800",
+                # "/home/timlocal/projects/gigastep/logdir/evosax/eval/v2/openes/identical_5_vs_5/algconfig4_envconfig2_lstmconfig0/23_06_06_10_20_50/ado_log_iter_2000",
             ]
         },
     }
@@ -128,6 +239,10 @@ if __name__ == "__main__":
         env_cfg0["max_agent_in_vec_obs"] = 100
         env_cfg0["debug_reward"] = False
         env_cfg0["max_episode_length"] = 500
+        # Config 1
+        env_cfg1 = copy.deepcopy(env_cfg0)
+        env_cfg1["config_name"] = "config1"
+        env_cfg1["max_episode_length"] = 200
         # Config 2
         env_cfg2 = copy.deepcopy(env_cfg0)
         env_cfg2["config_name"] = "config2"
@@ -154,13 +269,22 @@ if __name__ == "__main__":
         from evosax.utils import ESLog, ParameterReshaper
         param_ego_reshaper = ParameterReshaper(network_dict["params"], n_devices=1)
 
+        chkpt_nums = []
+        winrates = []
+        tierates = []
+        loserates = []
+
         for chkpt_path in trained_agent_dict["identical_5_vs_5"]["path"]:
 
             path_name = chkpt_path.split("/")
+            alg_name = path_name[-5]
             cfg_name = path_name[-3].split("_")[0]
+            agt_name = path_name[-1].split("_")[0]
             ckp_name = path_name[-1].split("_")[-1]
 
-            print("Evaluating " + cfg_name + " " + ckp_name)
+            chkpt_nums.append(int(ckp_name))
+
+            print("Evaluating " + alg_name + " on alg " + cfg_name + " with " + agt_name + " agent checkpoint " + ckp_name)
 
             es_ego_logging = ESLog(
                                 num_dims=param_ego_reshaper.total_params,
@@ -169,8 +293,12 @@ if __name__ == "__main__":
                                 maximize=True,
                             )
             es_ego_log = es_ego_logging.initialize()
-            es_ego_log = es_ego_logging.load(filename=chkpt_path)
-            network_dict["params"] = param_ego_reshaper.reshape(jnp.repeat(es_ego_log["top_params"][0][None], 20, axis=0))
+            if int(ckp_name) == 0:
+                params_flat = param_ego_reshaper.flatten_single(network_dict["params"])
+                network_dict["params"] = param_ego_reshaper.reshape(jnp.repeat(params_flat[None], 20, axis=0))
+            else:
+                es_ego_log = es_ego_logging.load(filename=chkpt_path)
+                network_dict["params"] = param_ego_reshaper.reshape(jnp.repeat(es_ego_log["top_params"][0][None], 20, axis=0))
 
 
             # actor_critic,_ = torch.load(
@@ -191,3 +319,10 @@ if __name__ == "__main__":
             #     device = "cuda:0",
             #     headless = False
             # )
+
+            winrates.append(wining_rate_vec[0])
+            loserates.append(wining_rate_vec[1])
+            tierates.append(wining_rate_vec[2])
+
+        results = np.stack((chkpt_nums, winrates, tierates, loserates), axis=0)
+        np.savetxt("/".join(path_name[:-1]) + "/" + agt_name + "_results.csv", results, delimiter=",")

@@ -22,7 +22,7 @@ class GigastepViewer:
     display = None
 
     def __init__(
-        self, frame_size, show_global_state=True, show_num_agents=1, headless=False
+        self, frame_size, show_global_state=True, show_num_agents=0, headless=False
     ):
         # only import pygame if the viewer is used
         try:

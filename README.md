@@ -22,7 +22,7 @@ To install JAX with GPU support see [JAX installation instructions](https://gith
 For training or using the visualizer, you need to install the following packages:
 
 ```bash
-pip install optax flax chex distrax gymnax pygame
+pip install PIL optax flax chex distrax gymnax pygame
 ```
 
 ## ✨ Features

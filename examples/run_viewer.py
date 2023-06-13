@@ -3,33 +3,29 @@ import jax
 import time
 import jax.numpy as jnp
 
-from gigastep import GigastepEnv, stack_agents, GigastepViewer
+from gigastep import GigastepEnv, stack_agents, GigastepViewer, make_scenario
 
 
 def loop_user():
-    viewer = GigastepViewer(84 * 4)
+    viewer = GigastepViewer(84 * 4, show_num_agents=1)
     viewer.set_title("User input")
-    dyn = GigastepEnv()
+    env = make_scenario("identical_5_vs_5", discrete_actions=False)
     rng = jax.random.PRNGKey(1)
     while True:
-        s1 = GigastepEnv.get_initial_state(x=3, y=3, team=1)
-        s2 = GigastepEnv.get_initial_state(x=6, y=6, team=1)
-        # state = jnp.stack([s1, s2, s3], axis=0)
-        state = stack_agents(s1, s2)
+        key, rng = jax.random.split(rng, 2)
+        state, obs = env.reset(key)
+        ep_done = False
         t = 0
-        while jnp.sum(dyn.get_dones(state)) > 0:
+        while not ep_done and t < 50:
+            rng, key = jax.random.split(rng, 2)
+            a1 = viewer.continuous_action
+            a2 = jax.random.uniform(key, shape=(env.n_agents, 3), minval=-1, maxval=1)
+            action = jnp.where(jnp.arange(env.n_agents)[:, None] == 0, a1, a2)
+            rng, key = jax.random.split(rng, 2)
+            state, obs, r, a, ep_done = env.step(state, action, key)
+            viewer.draw(env, state, obs)
             if viewer.should_reset:
-                s1 = GigastepEnv.get_initial_state(x=3, y=3, team=1)
-                s2 = GigastepEnv.get_initial_state(x=6, y=6, team=1)
-                state = stack_agents(s1, s2)
-
-            rng, key = jax.random.split(rng, 2)
-            a1 = viewer.action
-            a2 = jax.random.uniform(key, shape=(3,), minval=-1, maxval=1)
-            action = jnp.stack([a1, a2], axis=0)
-            rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
-            viewer.draw(dyn, state, obs)
+                break
             if viewer.should_quit:
                 return
 

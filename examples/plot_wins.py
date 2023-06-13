@@ -80,7 +80,7 @@ def add_M_and_remove_zeros(name):
 def plot_wins(filename, env_name, results, ckpts):
     # sns.set("paper", "whitegrid", "dark", font_scale=1.5, rc={"lines.linewidth": 2})
     sns.set(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(6, 3))
+    fig, ax = plt.subplots(figsize=(8, 4))
 
     # sort by name (zfilled)
     ckpts = sorted(ckpts)
@@ -107,7 +107,7 @@ def main():
     keys = ["identical_5_vs_5_det"]
     os.makedirs("plots", exist_ok=True)
     os.makedirs("plots/pdf", exist_ok=True)
-    results_by_env, table_by_env = load_csv("cross_eval_results_self_play.csv")
+    results_by_env, table_by_env = load_csv("cross_eval_results_self_play_20M.csv")
     # results_by_env, table_by_env = load_csv("cross_eval_results.csv")
     for env, results in results_by_env.items():
         ckpts = list(results.keys())
@@ -134,19 +134,24 @@ def main():
                     print(f"Missing {keystr}")
 
         win_rates = 100 * win_rates
+
+        is_self_play = ["_2" in c for c in all_ckpts]
+        is_self_play = not np.any(is_self_play)
+
+        if not is_self_play:
+            idx_1 = [i for i, c in enumerate(all_ckpts) if c.endswith("_1")]
+            idx_2 = [i for i, c in enumerate(all_ckpts) if c.endswith("_2")]
+            idx_1 = np.array(idx_1)
+            idx_2 = np.array(idx_2)
+            win_rates = win_rates[idx_1][:, idx_2]
+            all_ckpts = [c for c in all_ckpts if c.endswith("_1")]
+
         plt.figure(figsize=(5, 4))
         heatmap = plt.imshow(win_rates, cmap="YlGnBu")
         # hide grid
         plt.grid(False)
 
-        is_self_play = ["_2" in c for c in all_ckpts]
-        is_self_play = not np.any(is_self_play)
-
-        if is_self_play:
-            # Remove _1 from the name (there is no _2)
-            ckpt_ticks = [add_M_and_remove_zeros(c) for c in all_ckpts]
-        else:
-            ckpt_ticks = [add_M_and_remove_zeros(c) + c[-2:] for c in all_ckpts]
+        ckpt_ticks = [add_M_and_remove_zeros(c) for c in all_ckpts]
 
         # Set the x- and y-tick labels
         plt.xticks(np.arange(len(all_ckpts)), ckpt_ticks, rotation=90)

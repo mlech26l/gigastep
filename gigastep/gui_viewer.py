@@ -6,14 +6,7 @@ import jax
 import numpy as np
 import jax.numpy as jnp
 import importlib
-import PIL.Image
 from gigastep.joystick_input import JoystickInput
-
-
-def resize(img, size):
-    img = PIL.Image.fromarray(img)
-    img = img.resize(size, resample=PIL.Image.NEAREST)
-    return np.array(img)
 
 
 def discretize(x, threshold=0.3):
@@ -36,6 +29,12 @@ class GigastepViewer:
         except ModuleNotFoundError:
             raise ModuleNotFoundError(
                 "Please install pygame (``pip3 install pygame``) to use the viewer"
+            )
+        try:
+            self.PIL_Image = importlib.import_module("PIL.Image")
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(
+                "Please install pygame (``pip3 install PIL``) to use the viewer"
             )
         self.pygame.init()
         self.clock = self.pygame.time.Clock()
@@ -69,6 +68,11 @@ class GigastepViewer:
         p = self._should_pause
         self._should_pause = False
         return p
+
+    def resize(self, img, size):
+        img = self.PIL_Image.fromarray(img)
+        img = img.resize(size, resample=self.PIL_Image.NEAREST)
+        return np.array(img)
 
     def poll(self):
         self.pygame.event.pump()
@@ -135,7 +139,7 @@ class GigastepViewer:
             global_obs = dyn.get_global_observation(state)
             global_obs = np.array(global_obs, dtype=np.uint8)
             # obs = self.cv2.cvtColor(np.array(obs), self.cv2.COLOR_RGB2BGR)
-            global_obs = resize(
+            global_obs = self.resize(
                 global_obs,
                 (self.frame_size, self.frame_size),
             )
@@ -148,7 +152,7 @@ class GigastepViewer:
             obs_1 = obs[i]
             obs_1 = np.array(obs_1, dtype=np.uint8)
             obs_1 = np.maximum(obs_1, 255 * np.uint8(1 - state[0]["alive"][i]))
-            obs_1 = resize(
+            obs_1 = self.resize(
                 obs_1,
                 (self.frame_size, self.frame_size),
             )

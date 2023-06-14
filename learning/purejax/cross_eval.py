@@ -21,6 +21,7 @@ from gymnax.environments import environment
 from gymnax.wrappers.purerl import GymnaxWrapper
 from typing import Optional, Tuple, Union
 
+from learning.purejax.ippo import ImageObsWrapper, FrameStackWrapper
 from utils import generate_gif, get_ep_done
 from network import ActorCriticMLP, ActorCriticLSTM
 
@@ -61,71 +62,6 @@ class GigaStepWrapper(GymnaxWrapper):
             obs = jax.lax.select(episode_done, obs_re, obs_st)
 
         return obs, state, reward, done, {}  # replace last argument with empty info
-
-
-# TODO: seems inefficient
-class FrameStackWrapper(GymnaxWrapper):
-    def __init__(self, env: environment.Environment, n_frames: int):
-        super().__init__(env)
-        self.n_frames = n_frames
-
-    def _get_stacked_obs(self, obs, state):
-        state[0]["stacked_obs"][self.pointer] = obs
-        self.pointer = (self.pointer + 1) % self.n_frames
-        return jnp.concatenate(state[0]["stacked_obs"], axis=-1)
-
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(
-        self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None
-    ) -> Tuple[chex.Array, environment.EnvState]:
-        obs, state = self._env.reset(key)
-        self.pointer = 0
-        state[0]["stacked_obs"] = [obs] * self.n_frames
-        obs = self._get_stacked_obs(obs, state)
-        return obs, state
-
-    @partial(jax.jit, static_argnums=(0,))
-    def step(
-        self,
-        key: chex.PRNGKey,
-        state: environment.EnvState,
-        action: Union[int, float],
-        params: Optional[environment.EnvParams] = None,
-    ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
-        stacked_obs = state[0]["stacked_obs"]
-        obs, state, reward, done, _ = self._env.step(
-            key,
-            state,
-            action,
-        )
-        state[0]["stacked_obs"] = stacked_obs
-        obs = self._get_stacked_obs(obs, state)
-        return obs, state, reward, done, {}  # replace last argument with empty info
-
-
-class ImageObsWrapper(GymnaxWrapper):
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(
-        self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None
-    ) -> Tuple[chex.Array, environment.EnvState]:
-        obs, state = self._env.reset(key)
-        obs = self._process_obs(obs)
-        return obs, state
-
-    @partial(jax.jit, static_argnums=(0,))
-    def step(
-        self,
-        key: chex.PRNGKey,
-        state: environment.EnvState,
-        action: Union[int, float],
-        params: Optional[environment.EnvParams] = None,
-    ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
-        obs, state, reward, done, info = self._env.step(key, state, action)
-        obs = self._process_obs(obs)
-        return obs, state, reward, done, info
-
-    def _process_obs(self, obs):
-        return obs.reshape(obs.shape[0], -1)
 
 
 @struct.dataclass
@@ -180,8 +116,8 @@ class LogMultiAgentWrapper(GymnaxWrapper):
             + new_episode_length * done,
         )
         ### determine win rate
-        team1 = self._env._env.teams # env_state[0]["team"]
-        team2 = 1 - self._env._env.teams # env_state[0]["team"]
+        team1 = self._env._env.teams  # env_state[0]["team"]
+        team2 = 1 - self._env._env.teams  # env_state[0]["team"]
         team1_done = team1 * done
         team2_done = team2 * done
         team1_all_done = team1_done.sum() == team1.sum()
@@ -193,16 +129,6 @@ class LogMultiAgentWrapper(GymnaxWrapper):
         info["team1_all_done"] = team1_all_done
         info["team2_all_done"] = team2_all_done
         return obs, state, reward, done, info
-
-
-class Transition(NamedTuple):
-    done: jnp.ndarray
-    action: jnp.ndarray
-    value: jnp.ndarray
-    reward: jnp.ndarray
-    log_prob: jnp.ndarray
-    obs: jnp.ndarray
-    info: jnp.ndarray
 
 
 def make_eval_fn(config):
@@ -234,7 +160,7 @@ def make_eval_fn(config):
         raise NotImplementedError
     else:
         raise ValueError("Unrecognized network type " + config["NETWORK_TYPE"])
-    
+
     def eval_fn(rng, net_params, env_state=None, obsv=None):
         network = make_network()
 
@@ -276,15 +202,6 @@ def make_eval_fn(config):
     return eval_fn, (env, unwrapped_env), make_network
 
 
-def get_filename(dir):
-    file_id = 0
-    while True:
-        filename = os.path.join(dir, f"ep_{file_id:06d}.npz")
-        if not os.path.exists(filename):
-            return filename
-        file_id += 1
-
-
 def load_ckpt(filepath):
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     ckpt = orbax_checkpointer.restore(filepath)
@@ -295,17 +212,11 @@ if __name__ == "__main__":
     ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
+    parser.add_argument("--ckpt1", type=str, default="")
+    parser.add_argument("--ckpt2", type=str, default="")
     parser.add_argument(
-        "--ckpt1",
-        type=str,
-        default=""
+        "--ckpt-mode", type=str, default="12", choices=["12", "11", "22", "21"]
     )
-    parser.add_argument(
-        "--ckpt2",
-        type=str,
-        default=""
-    )
-    parser.add_argument("--ckpt-mode", type=str, default="12", choices=["12", "11", "22", "21"])
     parser.add_argument("--n-episodes", type=int, default=1000)
     parser.add_argument("--min-ep-len", type=int, default=10)
     args = parser.parse_args()
@@ -355,8 +266,8 @@ if __name__ == "__main__":
         "ENV_NAME": args.env_name,
         "ANNEAL_LR": False,  # True,
         ###### FOR EVAL
-        "EVAL_NUM_STEPS": 1e3, # number of steps for each jitted eval (note that this is different from env max steps)
-        "EVAL_TOTAL_NUM_STEPS": 1e5, # total number of eval steps
+        "EVAL_NUM_STEPS": 1e3,  # number of steps for each jitted eval (note that this is different from env max steps)
+        "EVAL_TOTAL_NUM_STEPS": 1e5,  # total number of eval steps
     }
 
     rng = jax.random.PRNGKey(42)
@@ -378,14 +289,18 @@ if __name__ == "__main__":
                 network_params["params"][k] = network_params1["params"][k]
         elif args.ckpt_mode == "11":
             if "team2" in k:
-                network_params["params"][k] = network_params2["params"][k.replace("team2", "team1")]
+                network_params["params"][k] = network_params2["params"][
+                    k.replace("team2", "team1")
+                ]
             else:
                 network_params["params"][k] = network_params1["params"][k]
         elif args.ckpt_mode == "22":
             if "team2" in k:
                 network_params["params"][k] = network_params2["params"][k]
             else:
-                network_params["params"][k] = network_params1["params"][k.replace("team1", "team2")]
+                network_params["params"][k] = network_params1["params"][
+                    k.replace("team1", "team2")
+                ]
         elif args.ckpt_mode == "21":
             if "team2" in k:
                 network_params["params"][k] = network_params1["params"][k]
@@ -394,9 +309,11 @@ if __name__ == "__main__":
         else:
             raise ValueError(f"Unrecognized checkpoint mode {args.ckpt_mode}")
 
-    win1_list = [] # wrt team1
-    win2_list = [] # wrt team1
-    pbar = tqdm(range(0, int(config["EVAL_TOTAL_NUM_STEPS"]), int(config["EVAL_NUM_STEPS"])))
+    win1_list = []  # wrt team1
+    win2_list = []  # wrt team1
+    pbar = tqdm(
+        range(0, int(config["EVAL_TOTAL_NUM_STEPS"]), int(config["EVAL_NUM_STEPS"]))
+    )
     pbar.set_description("[0/{}] -".format(config["EVAL_TOTAL_NUM_STEPS"]))
     out = {"runner_state": (rng, network_params, None, None)}
     for i in pbar:
@@ -423,12 +340,17 @@ if __name__ == "__main__":
         win2 = sum(win2_list)
         total = len(win1_list)
         win1_rate = win1 / total
-        pbar.set_description("[{}/{}] {}".format(i, config["EVAL_TOTAL_NUM_STEPS"], toc-tic) + f" win rate {win1_rate:.6f} ({win1}/{total})")
+        pbar.set_description(
+            "[{}/{}] {}".format(i, config["EVAL_TOTAL_NUM_STEPS"], toc - tic)
+            + f" win rate {win1_rate:.6f} ({win1}/{total})"
+        )
 
         if total > args.n_episodes:
             break
 
-    win1 = sum(win1_list[:args.n_episodes])
-    win2 = sum(win2_list[:args.n_episodes])
-    total = len(win1_list[:args.n_episodes])
-    print(f"{args.env_name},{args.ckpt_mode},{win1},{win2},{total},{args.ckpt1},{args.ckpt2}")
+    win1 = sum(win1_list[: args.n_episodes])
+    win2 = sum(win2_list[: args.n_episodes])
+    total = len(win1_list[: args.n_episodes])
+    print(
+        f"{args.env_name},{args.ckpt_mode},{win1},{win2},{total},{args.ckpt1},{args.ckpt2}"
+    )

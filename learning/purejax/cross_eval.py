@@ -21,7 +21,7 @@ from gymnax.environments import environment
 from gymnax.wrappers.purerl import GymnaxWrapper
 from typing import Optional, Tuple, Union
 
-from learning.purejax.ippo import ImageObsWrapper, FrameStackWrapper
+from learning.purejax.ippo import ImageObsWrapper, FrameStackWrapper, Transition
 from utils import generate_gif, get_ep_done
 from network import ActorCriticMLP, ActorCriticLSTM
 

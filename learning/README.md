@@ -1,23 +1,5 @@
 # Learning in Gigastep
 
-## MARLlib
-
-### Installation
-```
-$ cd MARLlib
-$ pip install -e .
-$ pip install ma_gym
-```
-```
-$ cd ray
-$ python python/ray/setup-dev.py -y
-```
-
-### Run
-```
-$ python examples/train_gigastep.py
-```
-
 ## evosax
 
 ### Installation
@@ -42,18 +24,6 @@ $ pip install setuptools==59.5.0
 ```
 This reads images from vmap scan. Consider doing single rollout if memory efficiency becomes an issue.
 
-### MAVA
-
-### Installation
-```
-$ sudo apt-get install swig
-$ cd Mava
-$ pip install -e . # don't do pip install id-mava[reverb,jax,envs] since that is out-of-date
-$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/anaconda3/envs/gigastep/lib # you need this for every runs; perhaps put it in bashrc
-
-$ pip install --upgrade dm-haiku # to fix "AttributeError: 'Config' object has no attribute 'jax_experimental_name_stack'"
-```
-
 ### Torch PPO
 #### Installation
 ```
@@ -65,4 +35,24 @@ $ pip install stable-baselines3
 $ pip install h5py
 $ pip install torch==1.13.1
 $ pip install wandb
+```
+
+## PureJaxRL
+### Run
+Train
+```
+$ python ippo.py --env-name identical_5_vs_5 \
+                 --all-total-timesteps 20000000 \
+                 --eval-every 1000000 \
+                 --base-dirname "gigastep_out" \
+                 --self-play
+```
+Eval
+```
+$ python cross_eval.py --env-name identical_5_vs_5 \
+                       --ckpt1 <path-to-ckpt-1> \
+                       --ckpt2 <path-to-ckpt-2> \
+                       --ckpt-mode "11" \
+                       --n-episodes 1000 \
+                       --min-ep-len 30
 ```

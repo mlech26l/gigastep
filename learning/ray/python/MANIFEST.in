@@ -1,2 +1,0 @@
-include ray/autoscaler/ray-schema.json
-include ray/py.typed

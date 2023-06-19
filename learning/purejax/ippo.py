@@ -478,14 +478,15 @@ def make_train(config):
     return train, (env, unwrapped_env), make_network
 
 
-def overwrite_param_for_self_play(network_params, network_params_bank):
+def overwrite_param_for_self_play(network_params, network_params_bank, set_team1_as_old_copies=False):
     old_network_params = network_params_bank[np.random.choice(np.arange(len(network_params_bank)))]
     override_params = {}
+    old_copies_team = "team1" if set_team1_as_old_copies else "team2" # default: team2 is from old checkpoint copies
     for k, v in network_params.items():
         if k == "params":
             override_params[k] = {}
             for kk in v.keys():
-                if "team2" in kk: # team2 is from old checkpoint copies
+                if old_copies_team in kk:
                     override_params[k][kk] = copy.deepcopy(old_network_params[k][kk])
                 else:
                     override_params[k][kk] = network_params[k][kk]
@@ -496,16 +497,27 @@ def overwrite_param_for_self_play(network_params, network_params_bank):
 
 if __name__ == "__main__":
     ENV_NAME = ["identical_5_vs_5", "identical_20_vs_20", "identical_5_vs_1"][0]
+    ALL_TOTAL_TIMESTEPS = 10e7
+    EVAL_EVERY = 1e7
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-name", type=str, default=ENV_NAME)
     parser.add_argument("--self-play", action="store_true")
+    parser.add_argument("--self-play-set-team1-as-old-copies", action="store_true")
+    parser.add_argument("--all-total-timesteps", type=int, default=ALL_TOTAL_TIMESTEPS)
+    parser.add_argument("--eval-every", type=int, default=EVAL_EVERY)
+    parser.add_argument("--base-dirname", type=str, default="all_with_new_rew_ver3")
     args = parser.parse_args()
     if args.self_play:
-        BASE_DIR = f"./logdir/all_with_new_rew_ver3_self_play/{args.env_name}"
+        if args.self_play_set_team1_as_old_copies:
+            env_name_for_path = args.env_name.split("_")
+            team1_num = env_name_for_path[1]
+            team2_num = env_name_for_path[-1]
+            env_name_for_path = "_".join([env_name_for_path[0], team2_num, env_name_for_path[2], team1_num])
+            BASE_DIR = f"./logdir/{args.base_dirname}_self_play/{env_name_for_path}"
+        else:
+            BASE_DIR = f"./logdir/{args.base_dirname}_self_play/{args.env_name}"
     else:
-        BASE_DIR = f"./logdir/all_with_new_rew_ver3/{args.env_name}"  # "./logdir/exp_42"
-    ALL_TOTAL_TIMESTEPS = 10e7
-    EVAL_EVERY = 1e7
+        BASE_DIR = f"./logdir/{args.base_dirname}/{args.env_name}"  # "./logdir/exp_42"
     EVAL_N_EPS = 4
     resolution = 84
     config = {
@@ -553,7 +565,7 @@ if __name__ == "__main__":
     train, env_tuple, make_network = make_train(config)
     train_jit = jax.jit(train)
 
-    if EVAL_EVERY > 0:
+    if args.eval_every > 0:
         network = make_network()
 
         def action_fn_base(network_params, obs, rng):
@@ -566,8 +578,8 @@ if __name__ == "__main__":
         network_params_bank = []
 
     ep_ret_list = []
-    pbar = tqdm(range(0, int(ALL_TOTAL_TIMESTEPS), int(config["TOTAL_TIMESTEPS"])))
-    pbar.set_description(f"[0/{ALL_TOTAL_TIMESTEPS}] -")
+    pbar = tqdm(range(0, int(args.all_total_timesteps), int(config["TOTAL_TIMESTEPS"])))
+    pbar.set_description(f"[0/{args.all_total_timesteps}] -")
     for i in pbar:
         try:
             tic = time.time()
@@ -576,7 +588,7 @@ if __name__ == "__main__":
             else:
                 train_state, env_state, obsv, net_state, rng = out["runner_state"]
                 if args.self_play:
-                    override_params = overwrite_param_for_self_play(train_state.params, network_params_bank)
+                    override_params = overwrite_param_for_self_play(train_state.params, network_params_bank, args.self_play_set_team1_as_old_copies)
                     train_state = TrainState.create(
                         apply_fn=train_state.apply_fn,
                         params=override_params,
@@ -593,10 +605,10 @@ if __name__ == "__main__":
             )
             ep_ret_list.extend(ep_ret_i)
 
-            pbar.set_description(f"[{i}/{ALL_TOTAL_TIMESTEPS}] {toc-tic}")
+            pbar.set_description(f"[{i}/{args.all_total_timesteps}] {toc-tic}")
 
             current_ts = i + int(config["TOTAL_TIMESTEPS"])
-            if (EVAL_EVERY > 0) and ((i == 0) or (current_ts % EVAL_EVERY == 0)):
+            if (args.eval_every > 0) and ((i == 0) or (current_ts % args.eval_every == 0)):
                 if i != 0:
                     ckpt = {"model": train_state, "config": config}
                     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()

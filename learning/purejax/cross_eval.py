@@ -164,6 +164,25 @@ def make_eval_fn(config):
     def eval_fn(rng, net_params, env_state=None, obsv=None):
         network = make_network()
 
+        if net_params is None:
+            # INIT NETWORK
+            rng, _rng = jax.random.split(rng)
+            if config["FRAME_STACK_N"] > 1:
+                init_x = jnp.zeros(
+                    (unwrapped_env.n_agents,)
+                    + unwrapped_env.observation_space.shape[:-1]
+                    + (
+                        unwrapped_env.observation_space.shape[-1]
+                        * config["FRAME_STACK_N"],
+                    )
+                )
+            else:
+                init_x = jnp.zeros(
+                    (unwrapped_env.n_agents,)
+                    + unwrapped_env.observation_space.shape
+                )
+            net_params = network.init(_rng, init_x)
+
         if env_state is None:
             rng, _rng = jax.random.split(rng)
             reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
@@ -311,6 +330,8 @@ if __name__ == "__main__":
 
     win1_list = []  # wrt team1
     win2_list = []  # wrt team1
+    ep_ret1_list = [] # epsiode return of team 1 averaged across agents in the same team
+    ep_ret2_list = [] # epsiode return of team 1 averaged across agents in the same team
     pbar = tqdm(
         range(0, int(config["EVAL_TOTAL_NUM_STEPS"]), int(config["EVAL_NUM_STEPS"]))
     )
@@ -327,12 +348,23 @@ if __name__ == "__main__":
             ep_done = team1_all_done | team2_all_done
             win_team1 = 1 - team1_all_done[ep_done]
             win_team2 = 1 - team2_all_done[ep_done]
+            ep_len = np.asarray(out["metrics"]["returned_episode_lengths"]).max(-1)
+            team1 = np.asarray(env_tuple[1].teams)
+            team2 = 1 - team1
+            ep_ret1 = np.asarray(out["metrics"]["returned_episode_returns"])[...,team1.astype(bool)].mean(-1) # average across agents
+            ep_ret2 = np.asarray(out["metrics"]["returned_episode_returns"])[...,team2.astype(bool)].mean(-1) # average across agents
+            ep_ret1 = ep_ret1[ep_done]
+            ep_ret2 = ep_ret2[ep_done]
             if args.min_ep_len > 0:
-                ep_len = np.asarray(out["metrics"]["returned_episode_lengths"]).max(-1)
-                win_team1 = win_team1[ep_len[ep_done] >= args.min_ep_len]
-                win_team2 = win_team2[ep_len[ep_done] >= args.min_ep_len]
+                ep_len_done = ep_len[ep_done]
+                win_team1 = win_team1[ep_len_done >= args.min_ep_len]
+                win_team2 = win_team2[ep_len_done >= args.min_ep_len]
+                ep_ret1 = ep_ret1[ep_len_done >= args.min_ep_len]
+                ep_ret2 = ep_ret2[ep_len_done >= args.min_ep_len]
             win1_list.extend(win_team1.tolist())
             win2_list.extend(win_team2.tolist())
+            ep_ret1_list.extend(ep_ret1.tolist())
+            ep_ret2_list.extend(ep_ret2.tolist())
         except KeyboardInterrupt:
             break
 
@@ -350,7 +382,9 @@ if __name__ == "__main__":
 
     win1 = sum(win1_list[: args.n_episodes])
     win2 = sum(win2_list[: args.n_episodes])
+    ep_ret1 = sum(ep_ret1_list[: args.n_episodes])
+    ep_ret2 = sum(ep_ret2_list[: args.n_episodes])
     total = len(win1_list[: args.n_episodes])
     print(
-        f"{args.env_name},{args.ckpt_mode},{win1},{win2},{total},{args.ckpt1},{args.ckpt2}"
+        f"{args.env_name},{args.ckpt_mode},{win1},{win2},{ep_ret1},{ep_ret2},{total},{args.ckpt1},{args.ckpt2}"
     )

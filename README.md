@@ -3,7 +3,7 @@
 ![ci_badge](https://github.com/mlech26l/gigastep/actions/workflows/python-app.yml/badge.svg) 
 ![PyPI version](https://img.shields.io/pypi/v/gigastep)
 
-![Gigastep](misc/scenario.webp)  
+![Gigastep](misc/banner2.webp)  
 
 ## 🔽 Installation
 

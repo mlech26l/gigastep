@@ -182,12 +182,26 @@ passing the ```show_num_agents=N``` argument of the viewer's initialization func
 
 ## 📜 Citation
 
-If you use this code for your research, please cite our paper:
+If you use this benchmark please cite our paper:
 
 ```bibtex
-@misc{gigastep2023,
-  author = {Gigastep},
-  title = {Gigastep: 1 Billion Steps Per Second Multi-Agent Reinforcement Learning},
-  year = {2023},
+@inproceedings{lechner2023gigastep,
+    author={Mathias Lechner and Lianhao Yin and Tim Seyde and Tsun-Hsuan Wang and Wei Xiao and Ramin Hasani and Joshua Rountree and Daniela Rus},
+    title={Gigastep - One Billion Steps per Second Multi-agent Reinforcement Learning},
+    booktitle={Advances in Neural Information Processing Systems},
+    year={2023},
+    url={https://openreview.net/forum?id=UgPAaEugH3}
 }
 ```
+
+## Acknowledgements
+
+Research was sponsored by the United States Air Force Research Laboratory 
+and the United States Air Force Artificial Intelligence Accelerator and was 
+accomplished under Cooperative Agreement Number FA8750-19-2-1000. 
+The views and conclusions contained in this document are those of the authors 
+and should not be interpreted as representing the official policies, 
+either expressed or implied, of the United States Air Force or the U.S. Government. 
+The U.S. Government is authorized to reproduce and distribute reprints for 
+Government purposes notwithstanding any copyright notation herein. 
+The research was also funded in part by the AI2050 program at Schmidt Futures (Grant G-22-63172) and Capgemini SE.

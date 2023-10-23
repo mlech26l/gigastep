@@ -5,11 +5,13 @@ import jax.numpy as jnp
 
 from gigastep import GigastepEnv, stack_agents, GigastepViewer, make_scenario
 
+from gigastep import GigastepViewer, make_scenario
+
 
 def loop_user():
     viewer = GigastepViewer(84 * 4, show_num_agents=1)
     viewer.set_title("User input")
-    env = make_scenario("identical_5_vs_5", discrete_actions=False)
+    env = make_scenario("identical_5_vs_5_fobs_rgb_void_cont")
     rng = jax.random.PRNGKey(1)
     while True:
         key, rng = jax.random.split(rng, 2)

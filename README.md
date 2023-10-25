@@ -5,16 +5,21 @@
 
 ![Gigastep](misc/banner2.webp)  
 
+## 🚧 Update Oct 2023
+
+The following updates will be made over the next few weeks:
+
+- Pool of baseline agents to be added
+- Documentation
+
 ## 🔽 Installation
 
 ```shell
 pip3 install gigastep
 ```
-or locally via
+or the latest version via
 ```shell
-git clone git@github.com:mlech26l/gigastep.git
-cd gigastep
-pip install -e .
+pip install git+git@github.com:mlech26l/gigastep.git
 ```
 
 To install JAX with GPU support see [JAX installation instructions](https://github.com/google/jax#installation)

@@ -5,12 +5,14 @@
 
 ![Gigastep](misc/banner2.webp)  
 
-## 🚧 Update Oct 2023
+## 🚧 Updates coming soon - Oct 2023 🚧 
 
-The following updates will be made over the next few weeks:
+The following updates will be pushed over the next few weeks:
 
 - Pool of baseline agents to be added
 - Documentation
+
+The code and interface will be subject to changes, thus, use at your own risk.
 
 ## 🔽 Installation
 

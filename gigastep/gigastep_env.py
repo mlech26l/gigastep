@@ -240,7 +240,7 @@ class GigastepEnv:
             obs_var_count += self._maps["boxes"][0].shape[0] * 4
 
         vector_obs_spec = Box(
-            low=jnp.NINF
+            low=-jnp.inf
             * jnp.ones(
                 obs_var_count,
                 dtype=jnp.float32,
@@ -275,6 +275,7 @@ class GigastepEnv:
         self._v_step_agents = jax.vmap(self._step_agents)
         self.v_step = jax.jit(jax.vmap(self.step))
         self.v_reset = jax.jit(jax.vmap(self.reset))
+        self.v_get_global_observation = jax.jit(jax.vmap(self.get_global_observation))
         self.v_set_aux_reward_factor = jax.vmap(
             self.set_aux_reward_factor, in_axes=(0, None)
         )
@@ -1184,10 +1185,10 @@ class GigastepEnv:
         return obs, state
 
     @partial(jax.jit, static_argnums=(0,))
-    def reset_done_episodes(self, states, obs, ep_dones, rng_key):
+    def reset_done_episodes(self, obs, states, ep_dones, rng_key):
         batch_size = ep_dones.shape[0]
         rng_key = jax.random.split(rng_key, batch_size)
-        new_states, new_obs = self.v_reset(rng_key)
+        new_obs, new_states = self.v_reset(rng_key)
 
         reset_states = jax.tree_util.tree_map(
             lambda x, y: jnp.where(

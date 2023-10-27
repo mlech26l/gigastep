@@ -1,3 +1,4 @@
+import os
 from typing import Callable
 import jax
 import jax.numpy as jnp
@@ -5,6 +6,7 @@ from functools import partial
 from flax import struct
 from tqdm.auto import tqdm
 import numpy as np
+from PIL import Image
 
 
 class AdversaryPolicy(struct.PyTreeNode):
@@ -259,6 +261,40 @@ class RolloutManager:
             ep_dones=ep_dones,
         )
 
+    def generate_frames(self, train_state, adv_policy, rng):
+        rng, key, key_adv = jax.random.split(rng, 3)
+        key = jax.random.split(key, 1)
+        obs, state = self.env.v_reset(key)
+        adv_state = adv_policy.init_state(1, key_adv)
+
+        ep_dones = jnp.zeros(1, dtype=jnp.bool_)
+        frame_list = []
+        while not jnp.all(ep_dones):
+            frame = self.env.v_get_global_observation(state)[0]
+            frame_list.append(frame)
+
+            obs_ego, obs_adv = jnp.split(obs, [self.env.n_agents_team1], axis=1)
+            rng, key_action, key_adv, key_step = jax.random.split(rng, 4)
+
+            action_pi, logp = sample_from_policy(train_state, obs_ego, key_action)
+            adv_action, adv_state = adv_policy.sample_actions(
+                adv_state, obs_adv, key_adv
+            )
+            action_fused = jnp.concatenate([action_pi, adv_action], axis=-1)
+
+            key_step = jax.random.split(key_step, 1)
+            obs, state, rewards, alive, ep_dones = self.env.v_step(
+                state, action_fused, key_step
+            )
+        return frame_list
+
+
+def save_gif(filepath, frame_list):
+    frame_list = [Image.fromarray(np.array(frame)) for frame in frame_list]
+    frame_list[0].save(
+        filepath, save_all=True, append_images=frame_list[1:], duration=50, loop=0
+    )
+
 
 def train_iter(buffer, policy_state, value_state, key, config):
     buffer = shuffle_buffer(buffer, key)
@@ -351,6 +387,7 @@ class Runner:
             # make_circling_adversary(env.n_agents_team2, all_same_diretion=False),
         ]
         self.total_samples_trained = 0
+        self.total_iters = 0
         self.pbar = None
 
     def rng_key(self, n=1):
@@ -416,3 +453,9 @@ class Runner:
             f"Total samples trained: {int_to_str(self.total_samples_trained)}"
         )
         self.pbar.update(1)
+        self.total_iters += 1
+        frame_list = self.rollout_manager.generate_frames(
+            self.policy_state, self.adversary_pool[0], self.rng_key()
+        )
+        os.makedirs("gifs", exist_ok=True)
+        save_gif(f"gifs/it_{self.total_iters:04d}.gif", frame_list)

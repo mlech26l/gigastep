@@ -12,7 +12,7 @@ The following updates will be pushed over the next few weeks:
 - Pool of baseline agents to be added
 - Documentation
 
-The code and interface will be subject to changes, thus, use at your own risk.
+During this period, the code, environments, and interface will be subject to changes, thus, use at your own risk.
 
 ## 🔽 Installation
 

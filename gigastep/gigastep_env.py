@@ -209,6 +209,8 @@ class GigastepEnv:
             else:
                 n_opponents += 1
         self.n_teams = [n_ego_agents, n_opponents]
+        self.n_agents_team1 = n_ego_agents
+        self.n_agents_team2 = n_opponents
 
         self.limits = (limit_x, limit_y)
         self.z_max = 10
@@ -283,6 +285,12 @@ class GigastepEnv:
     @property
     def teams(self):
         return self._per_agent_team
+
+    @property
+    def n_actions(self):
+        if not self.discrete_actions:
+            raise ValueError("n_actions is only defined for discrete actions")
+        return self.action_space.n
 
     @partial(jax.jit, static_argnums=(0,))
     def _step_agents(self, state, action, max_thrust):
@@ -678,7 +686,7 @@ class GigastepEnv:
         )
 
         dones = (1 - alive).astype(jnp.bool_)
-        return next_states, obs, reward, dones, episode_done
+        return obs, next_states, reward, dones, episode_done
 
     def get_dones(self, states):
         return states[0]["alive"]
@@ -1173,7 +1181,7 @@ class GigastepEnv:
             jnp.arange(x.shape[0]),
         )
 
-        return state, obs
+        return obs, state
 
     @partial(jax.jit, static_argnums=(0,))
     def reset_done_episodes(self, states, obs, ep_dones, rng_key):
@@ -1202,7 +1210,7 @@ class GigastepEnv:
             )
             obs1 = jnp.where(ep_dones.reshape(batch_size, 1, 1), new_obs[1], obs[1])
             obs = (obs0, obs1)
-        return reset_states, obs
+        return obs, reset_states
 
     @classmethod
     def get_initial_state(
@@ -1278,7 +1286,7 @@ class EnvFrameStack:
             obs
         )
 
-        return states, self.stacked_obs, r, d, ep_dones
+        return self.stacked_obs, states, r, d, ep_dones
 
     def reset_done_episodes(self, states, obs, ep_dones, key):
         states, _ = self.env.reset_done_episodes(states, self.obs, ep_dones, key)
@@ -1288,13 +1296,13 @@ class EnvFrameStack:
             ep_dones.reshape(batch_size, 1, 1, 1, 1), new_obs, self.stacked_obs
         )
 
-        return states, self.stacked_obs
+        return self.stacked_obs, states
 
     def v_reset(self, key):
         states, obs = self.env.v_reset(key)
         self.obs = obs
 
-        return states, obs
+        return obs, states
 
     def reset(self):
         obs = self.env.reset()

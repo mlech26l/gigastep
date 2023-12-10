@@ -47,13 +47,25 @@ def int_to_str(x):
 
 
 def compute_gae(rollout_buffer, value_state, gamma=0.99, gae_lambda=0.95):
+    # gae, next_value = gae_and_next_value
+    #                 done, value, reward = (
+    #                     transition.done,
+    #                     transition.value,
+    #                     transition.reward,
+    #                 )
+    #                 delta = reward + config["GAMMA"] * next_value * (1 - done) - value
+    #                 gae = (
+    #                     delta
+    #                     + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
+    #                 )
+    #                 return (gae, value), gae
     def step_gae(gae_and_next_value, transition):
         gae, next_value = gae_and_next_value
-        obs, reward, alive = transition
+        obs, reward, done = transition
 
         value = value_state.apply_fn(value_state.params, obs)[:, :, 0]
-        delta = reward + gamma * next_value * alive - value
-        gae = delta + gamma * gae_lambda * value * gae
+        delta = reward + gamma * next_value * (1 - done) - value
+        gae = delta + gamma * gae_lambda * (1 - done) * gae
         return (gae, value), (gae, value)
 
     last_value = value_state.apply_fn(value_state.params, rollout_buffer.obs[-1])[
@@ -62,7 +74,7 @@ def compute_gae(rollout_buffer, value_state, gamma=0.99, gae_lambda=0.95):
     _, (advantages, values) = jax.lax.scan(
         step_gae,
         (jnp.zeros_like(last_value), last_value),
-        [rollout_buffer.obs[:-1], rollout_buffer.rewards, rollout_buffer.alive],
+        [rollout_buffer.obs[:-1], rollout_buffer.rewards, rollout_buffer.done],
         reverse=True,
     )
     return advantages, values, advantages + values
@@ -110,7 +122,7 @@ class RolloutBuffer(struct.PyTreeNode):
     actions: jnp.ndarray = struct.field(pytree_node=True)
     logprobs: jnp.ndarray = struct.field(pytree_node=True)
     rewards: jnp.ndarray = struct.field(pytree_node=True)
-    alive: jnp.ndarray = struct.field(pytree_node=True)
+    done: jnp.ndarray = struct.field(pytree_node=True)
     ep_dones: jnp.ndarray = struct.field(pytree_node=True)
 
     def average_episode_length(self):
@@ -133,16 +145,16 @@ class RolloutBuffer(struct.PyTreeNode):
         value_targets = flatten_time_batch_agent_dim(value_targets)
         advantages = flatten_time_batch_agent_dim(advantages)
         values = flatten_time_batch_agent_dim(values)
-        alive = flatten_time_batch_agent_dim(self.alive)
+        not_done = jnp.logical_not(flatten_time_batch_agent_dim(self.done))
 
         # Value network needs (obs, cum_rewards)
-        obs = obs[alive]
-        next_obs = next_obs[alive]
-        actions = actions[alive]
-        logprobs = logprobs[alive]
-        value_targets = value_targets[alive]
-        values = values[alive]
-        advantages = advantages[alive]
+        obs = obs[not_done]
+        next_obs = next_obs[not_done]
+        actions = actions[not_done]
+        logprobs = logprobs[not_done]
+        value_targets = value_targets[not_done]
+        values = values[not_done]
+        advantages = advantages[not_done]
 
         return TrainBuffer(
             obs=obs,
@@ -230,11 +242,11 @@ class RolloutManager:
             action_fused = jnp.concatenate([action_pi, adv_action], axis=-1)
 
             key_step = jax.random.split(key_step, self.batch_size)
-            next_obs, state, rewards, alive, ep_dones = self.env.v_step(
+            next_obs, state, rewards, dones, ep_dones = self.env.v_step(
                 state, action_fused, key_step
             )
             carry, y = [next_obs, state, train_state, adv_state, rng], [
-                [obs, action_pi, logp, rewards, alive, ep_dones]
+                [obs, action_pi, logp, rewards, dones, ep_dones]
             ]
             return carry, y
 
@@ -246,18 +258,18 @@ class RolloutManager:
             length=100,
         )
         last_obs, last_state, train_state, adv_state, rng = carry_out
-        obs, action_pi, logp, rewards, alive, ep_dones = scan_out[0]
+        obs, action_pi, logp, rewards, done, ep_dones = scan_out[0]
         obs = jnp.concatenate([obs, last_obs[None]], axis=0)
         obs = obs[:, :, : self.env.n_agents_team1]
         rewards = rewards[:, :, : self.env.n_agents_team1]
-        alive = alive[:, :, : self.env.n_agents_team1]
+        done = done[:, :, : self.env.n_agents_team1]
 
         return RolloutBuffer(
             obs=obs,
             actions=action_pi,
             logprobs=logp,
             rewards=rewards,
-            alive=alive,
+            done=done,
             ep_dones=ep_dones,
         )
 
@@ -283,7 +295,7 @@ class RolloutManager:
             action_fused = jnp.concatenate([action_pi, adv_action], axis=-1)
 
             key_step = jax.random.split(key_step, 1)
-            obs, state, rewards, alive, ep_dones = self.env.v_step(
+            obs, state, rewards, done, ep_dones = self.env.v_step(
                 state, action_fused, key_step
             )
         return frame_list
@@ -325,6 +337,10 @@ def train_iter(buffer, policy_state, value_state, key, config):
     value_state, value_loss = jax.lax.scan(
         value_train_step, value_state, (buffer.obs, buffer.value_targets, buffer.values)
     )
+    # check if value_lsos is nan
+    if jnp.isnan(value_loss).any():
+        print(f"Value loss is nan! {value_loss}")
+        breakpoint()
 
     def policy_train_step(train_state, input_batch):
         obs, advantage, action, old_logprob = input_batch
@@ -362,6 +378,9 @@ def train_iter(buffer, policy_state, value_state, key, config):
         policy_state,
         (buffer.obs, buffer.advantages, buffer.actions, buffer.logprobs),
     )
+    if jnp.isnan(policy_loss).any():
+        print(f"Policy loss is nan! {policy_loss})")
+        breakpoint()
     loss_dict = {"policy_loss": policy_loss, "value_loss": value_loss}
     loss_dict = jax.tree_map(lambda x: x.mean(), loss_dict)
     return (

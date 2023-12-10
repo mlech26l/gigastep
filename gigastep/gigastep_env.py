@@ -687,6 +687,7 @@ class GigastepEnv:
         )
 
         dones = (1 - alive).astype(jnp.bool_)
+        dones = dones | episode_done
         return obs, next_states, reward, dones, episode_done
 
     def get_dones(self, states):

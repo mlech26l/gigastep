@@ -47,7 +47,7 @@ class GigaStepWrapper(GymnaxWrapper):
         params: Optional[environment.EnvParams] = None,
     ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
         key, key_reset = jax.random.split(key)
-        state_st, obs_st, reward, done, episode_done = self._env.step(
+        obs_st, state_st, reward, done, episode_done = self._env.step(
             state, action, key
         )
         obs_re, state_re = self.reset(key_reset, params)

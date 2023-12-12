@@ -14,7 +14,7 @@ if __name__ == "__main__":
     rng = jax.random.PRNGKey(1)
     rng, key = jax.random.split(rng, 2)
     key = jax.random.split(key, batch_size)
-    states, obs = env_stack.v_reset(key)
+    obs, states = env_stack.v_reset(key)
     t = 0
     while True:
         t += 1
@@ -26,11 +26,11 @@ if __name__ == "__main__":
         rng, key = jax.random.split(rng, 2)
         key = jax.random.split(key, batch_size)
 
-        states, obs, r, d, ep_dones = env_stack.v_step(states, actions, key)
+        obs, states, r, d, ep_dones = env_stack.v_step(states, actions, key)
 
         print(f"t= {t}, ep_dones", ep_dones)
         # time.sleep(0.5)
         if jnp.any(ep_dones):
             print("resetting")
             rng, key = jax.random.split(rng, 2)
-            states, obs = env_stack.reset_done_episodes(states, obs, ep_dones, key)
+            obs, states = env_stack.reset_done_episodes(obs, states, ep_dones, key)

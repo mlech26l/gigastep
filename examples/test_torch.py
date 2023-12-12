@@ -18,7 +18,7 @@ if __name__ == "__main__":
     rng = jax.random.PRNGKey(1)
     rng, key = jax.random.split(rng, 2)
     key = jax.random.split(key, batch_size)
-    states, obs = env.v_reset(key)
+    obs, states = env.v_reset(key)
     t = 0
     while True:
         t += 1
@@ -30,7 +30,7 @@ if __name__ == "__main__":
         action = torch2jax(action)
 
         key = jax.random.split(key, batch_size)
-        states, obs, r, d, ep_dones = env.v_step(states, action, key)
+        obs, states, r, d, ep_dones = env.v_step(states, action, key)
 
         # Move obs to torch
         torch_obs = jax2torch(obs)
@@ -43,4 +43,4 @@ if __name__ == "__main__":
         if jnp.any(ep_dones):
             print("resetting")
             rng, key = jax.random.split(rng, 2)
-            states, obs = env.reset_done_episodes(states, obs, ep_dones, key)
+            obs, states = env.reset_done_episodes(obs, states, ep_dones, key)

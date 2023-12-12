@@ -39,7 +39,7 @@ def loop_2agents():
         a2 = GigastepEnv.action(speed=1)
         action = jnp.stack([a1, a2], axis=0)
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         save_frame(dyn, state, obs, f"video/2agents/frame_{frame:04d}.png", obs2=True)
         frame += 1
@@ -61,7 +61,7 @@ def loop_some_agents():
     while jnp.sum(dyn.get_dones(state)) > 0:
         action = jnp.zeros((6, 3))
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         save_frame(
             dyn, state, obs, f"video/some_agents/frame_{frame:04d}.png", obs2=True
@@ -109,12 +109,12 @@ def loop_random_agents():
     frame = 0
     t = 0
     while frame < 120:
-        state, obs = dyn.reset(key)
+        obs, state = dyn.reset(key)
         while jnp.sum(dyn.get_dones(state)) > 0:
             rng, key = jax.random.split(rng, 2)
             action = jax.random.uniform(key, shape=(n_agents, 3), minval=-1, maxval=1)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             save_frame(
                 dyn,
                 state,
@@ -143,13 +143,13 @@ def loop_random_many_agents():
     os.makedirs("video/many", exist_ok=True)
     viewer = GigastepViewer(2 * res, show_num_agents=3)
 
-    state, obs = dyn.reset(key)
+    obs, state = dyn.reset(key)
     frame = 0
     while jnp.sum(dyn.get_dones(state)) > 0:
         rng, key = jax.random.split(rng, 2)
         action = jax.random.uniform(key, shape=(n_agents, 3), minval=-1, maxval=1)
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         save_frame(dyn, state, obs, f"video/many/frame_{frame:04d}.png")
         viewer.draw(dyn, state, obs)
         frame += 1
@@ -181,7 +181,7 @@ def loop_visible_debug():
         action = [GigastepEnv.action(speed=0) for s in range(state[0]["x"].shape[0])]
         action = jnp.stack(action, axis=0)
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         save_frame(dyn, state, obs, f"video/visibility/frame_{frame:04d}.png")
         frame += 1
@@ -210,7 +210,7 @@ def loop_2agents_altitude():
         t = t + 1
         action = jnp.stack([a1, a2, a3], axis=0)
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         save_frame(dyn, state, obs, f"video/dive/frame_{frame:04d}.png", obs1=False)
         frame += 1
@@ -229,13 +229,13 @@ def loop_maps():
     key, rng = jax.random.split(rng, 2)
     frame = 0
     while True:
-        state, obs = dyn.reset(key)
+        obs, state = dyn.reset(key)
         t = 0
         while jnp.sum(dyn.get_dones(state)) > 0:
             rng, key = jax.random.split(rng, 2)
             action = jax.random.uniform(key, shape=(n_agents, 3), minval=-1, maxval=1)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             save_frame(dyn, state, obs, f"video/maps/frame_{frame:04d}.png", obs1=True)
             frame += 1
@@ -269,7 +269,7 @@ def loop_heterogenous():
         state = stack_agents(s1, s2, s3)
         action = jnp.zeros((3, 3))
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         for i in range(5):
             save_frame(

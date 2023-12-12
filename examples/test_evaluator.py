@@ -53,7 +53,7 @@ def loop_env(env, policy = None, device = "cpu", headless = False):
         for ep_idx in range(5):
             ep_done = False
             key, rng = jax.random.split(rng, 2)
-            state, obs = env.reset(key)
+            obs, state = env.reset(key)
             while not ep_done:
                 rng, key, key2 = jax.random.split(rng, 3)
                 if policy is None:
@@ -73,7 +73,7 @@ def loop_env(env, policy = None, device = "cpu", headless = False):
                 action = evaluator.merge_actions(action_ego, action_opp)
 
                 rng, key = jax.random.split(rng, 2)
-                state, obs, r, dones, ep_done = env.step(state, action, key)
+                obs, state, r, dones, ep_done = env.step(state, action, key)
                 evaluator.update_step(r, dones, ep_done)
                 if not headless:
                     img = viewer.draw(env, state, obs)
@@ -109,7 +109,7 @@ def loop_env_vectorized(env, policy = None, device = "cpu"):
             ep_done = np.zeros(batch_size, dtype=jnp.bool_)
             key, rng = jax.random.split(rng, 2)
             key = jax.random.split(key, batch_size)
-            state, obs = env.v_reset(key)
+            obs, state = env.v_reset(key)
             t = 0
             
             recurrent_hidden_states = torch.zeros(env.n_teams[0], 
@@ -136,7 +136,7 @@ def loop_env_vectorized(env, policy = None, device = "cpu"):
 
                 rng, key = jax.random.split(rng, 2)
                 key = jax.random.split(key, batch_size)
-                state, obs, r, dones, ep_done = env.v_step(state, action, key)
+                obs, state, r, dones, ep_done = env.v_step(state, action, key)
                 evaluator.update_step(r, dones, ep_done)
 
                 time.sleep(SLEEP_TIME)

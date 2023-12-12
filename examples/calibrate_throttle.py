@@ -34,7 +34,7 @@ def loop_throttle():
             a7 = GigastepEnv.action(speed=-1, dive=1)
             action = jnp.stack([a1, a2, a3,a4,a5,a6,a7], axis=0)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return

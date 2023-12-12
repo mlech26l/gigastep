@@ -298,7 +298,7 @@ def main(**sweep_dict):
                 rng, key_action, key_step = jax.random.split(rng, 3)
                 key_step = jax.random.split(key_step, int(args.batch_size))
 
-                state, obs, reward, agent_done, episode_done = envs.v_step(state, action_jax, key_step)
+                obs, state, reward, agent_done, episode_done = envs.v_step(state, action_jax, key_step)
 
                 step_agent += 1
 
@@ -328,7 +328,7 @@ def main(**sweep_dict):
                         step_agent[int(i)] = 0
                 if jnp.any(episode_done):
                     rng, key = jax.random.split(rng, 2)
-                    state, obs = envs.reset_done_episodes(state, obs, episode_done, key)
+                    obs, state = envs.reset_done_episodes(obs, state, episode_done, key)
                 obs = torch.tensor(np.asarray(obs)).to(device)
                 obs = torch.moveaxis(obs, -1, 2)
 
@@ -338,7 +338,7 @@ def main(**sweep_dict):
                 masks_agent = masks_agent_all[:, :n_ego_agents]
                 masks_agent_opponent = masks_agent_all[:, n_ego_agents:]
             else:
-                obs, reward, done, infos = envs.step(torch.squeeze(action))
+                obs, state, reward, done, infos = envs.step(torch.squeeze(action))
 
             masks_agent = masks_agent.unsqueeze(-1)
             masks_agent_opponent = masks_agent_opponent.unsqueeze(-1)

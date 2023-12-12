@@ -19,7 +19,7 @@ def main():
     while True:
         rng, key_reset = jax.random.split(rng, 2)
         ep_done = False
-        state, obs = env.reset(key_reset)
+        obs, state = env.reset(key_reset)
         total_user_reward = 0
         num_steps = 0
         while not ep_done:
@@ -41,7 +41,7 @@ def main():
             action = jnp.concatenate(
                 [jnp.expand_dims(action_user, 0), action_ai], axis=0
             )
-            state, obs, rewards, dones, ep_done = env.step(state, action, key_step)
+            obs, state, rewards, dones, ep_done = env.step(state, action, key_step)
             img = viewer.draw(env, state, obs)
             viewer.clock.tick(10)
             total_user_reward += rewards[0]

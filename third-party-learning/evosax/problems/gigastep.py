@@ -130,7 +130,7 @@ class GigastepFitness(object):
             action_ado, _ = self.network(ado_policy_params, obs_ado, rng=rng_net)
             action = jnp.concatenate((action_ego, action_ado), axis=0)
 
-            next_s, next_o, reward, dones, done = self.env.step(
+            next_o, next_s, reward, dones, done = self.env.step(
                 state, action, rng_step
             )
 
@@ -222,7 +222,7 @@ class GigastepFitness(object):
             hidden_ado, action_ado, _ = self.network(ado_policy_params, obs_ado, hidden_ado, rng_net)
             action = jnp.concatenate((action_ego, action_ado), axis=0)
 
-            next_s, next_o, reward, dones, done = self.env.step(
+            next_o, next_s, reward, dones, done = self.env.step(
                 state, action, rng_step
             )
 

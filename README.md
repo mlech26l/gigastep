@@ -96,7 +96,7 @@ while not jnp.all(ep_dones):
     # In case at least one episode is done, reset the state of the done episodes only
     if jnp.any(ep_dones):
         rng, key = jax.random.split(rng, 2)
-        obs, states = env.reset_done_episodes(state, obs, ep_dones, key)
+        obs, state = env.reset_done_episodes(obs, state, ep_dones, key)
 ```
 
 ## 🎭 Scenarios 

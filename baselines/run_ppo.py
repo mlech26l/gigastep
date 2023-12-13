@@ -56,10 +56,10 @@ def test_rollout():
         "entropy_coef": 0.01,
         "clip_eps": 0.2,
         "epochs_per_iter": 4,
-        "ppo_iters": 100,
+        "ppo_iters": 200,
         "train_batch_size": 128,
-        "rollout_batch_size": 512,
-        "gae_lambda": 0.95,
+        "rollout_batch_size": 1024,
+        "gae_lambda": 1.0,
         "gamma": 0.99,
     }
     runner = Runner(env, policy_state, value_state, config)

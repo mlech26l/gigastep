@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 from functools import partial
 from flax import struct
+from jax.random import t
 from tqdm.auto import tqdm
 import numpy as np
 from PIL import Image
@@ -91,7 +92,10 @@ def shuffle_buffer(buffer, key):
 def concat_buffers(buffer1, buffer2):
     if buffer1 is None:
         return buffer2
-    return jax.tree_util.tree_multimap(
+    # return jax.tree_util.tree_multimap(
+    #     lambda x, y: jnp.concatenate([x, y], axis=0), buffer1, buffer2
+    # )
+    return jax.tree_util.tree_map(
         lambda x, y: jnp.concatenate([x, y], axis=0), buffer1, buffer2
     )
 
@@ -145,7 +149,11 @@ class RolloutBuffer(struct.PyTreeNode):
         value_targets = flatten_time_batch_agent_dim(value_targets)
         advantages = flatten_time_batch_agent_dim(advantages)
         values = flatten_time_batch_agent_dim(values)
-        not_done = jnp.logical_not(flatten_time_batch_agent_dim(self.done))
+        delayed_done = jnp.concatenate(
+            [jnp.zeros_like(self.done[0][None, :, :], dtype=jnp.bool_), self.done[:-1]],
+            axis=0,
+        )
+        not_done = jnp.logical_not(flatten_time_batch_agent_dim(delayed_done))
 
         # Value network needs (obs, cum_rewards)
         obs = obs[not_done]
@@ -200,10 +208,10 @@ def make_circling_adversary(n_agents, all_same_diretion=False):
         direction = jax.random.randint(key, (batch_size, 1), 0, 2)
         direction = direction * (right - left) + left
         direction = jnp.repeat(direction, n_agents, axis=1)
-        return direction, direction
+        return direction
 
     def sample_fn(state, obs, key):
-        return state
+        return state, state
 
     return AdversaryPolicy(
         init_fn_same_dir if all_same_diretion else init_fn, sample_fn
@@ -281,6 +289,7 @@ class RolloutManager:
 
         ep_dones = jnp.zeros(1, dtype=jnp.bool_)
         frame_list = []
+        total_rewards = jnp.zeros(self.env.n_agents)
         while not jnp.all(ep_dones):
             frame = self.env.v_get_global_observation(state)[0]
             frame_list.append(frame)
@@ -298,7 +307,10 @@ class RolloutManager:
             obs, state, rewards, done, ep_dones = self.env.v_step(
                 state, action_fused, key_step
             )
-        return frame_list
+            total_rewards += rewards[0]
+        team_a_reward = total_rewards[: self.env.n_agents_team1].mean()
+        team_b_reward = total_rewards[self.env.n_agents_team1 :].mean()
+        return frame_list, team_a_reward, team_b_reward
 
 
 def save_gif(filepath, frame_list):
@@ -306,6 +318,7 @@ def save_gif(filepath, frame_list):
     frame_list[0].save(
         filepath, save_all=True, append_images=frame_list[1:], duration=50, loop=0
     )
+    print(f"Saved gif to {filepath}")
 
 
 def train_iter(buffer, policy_state, value_state, key, config):
@@ -402,8 +415,8 @@ class Runner:
         self.rollout_manager = RolloutManager(env, config["rollout_batch_size"])
         self.adversary_pool = [
             make_random_adversary(env.n_agents_team2, env.n_actions),
-            # make_circling_adversary(env.n_agents_team2, all_same_diretion=True),
-            # make_circling_adversary(env.n_agents_team2, all_same_diretion=False),
+            make_circling_adversary(env.n_agents_team2, all_same_diretion=True),
+            make_circling_adversary(env.n_agents_team2, all_same_diretion=False),
         ]
         self.total_samples_trained = 0
         self.total_iters = 0
@@ -473,8 +486,10 @@ class Runner:
         )
         self.pbar.update(1)
         self.total_iters += 1
-        frame_list = self.rollout_manager.generate_frames(
-            self.policy_state, self.adversary_pool[0], self.rng_key()
-        )
+        for adv in self.adversary_pool:
+            frame_list, team_a_r, team_b_r = self.rollout_manager.generate_frames(
+                self.policy_state, adv, jax.random.PRNGKey(7)
+            )
+            print(f"Team A reward: {team_a_r:.2f}, Team B reward: {team_b_r:.2f}")
         os.makedirs("gifs", exist_ok=True)
         save_gif(f"gifs/it_{self.total_iters:04d}.gif", frame_list)

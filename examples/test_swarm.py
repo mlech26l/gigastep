@@ -59,12 +59,13 @@ def loop_random_agents():
     key, rng = jax.random.split(rng, 2)
     frameid = 0
     while True:
-        state, obs = dyn.reset(key)
+        obs, state = dyn.reset(key)
         while jnp.sum(dyn.get_dones(state)) > 0:
+            print(frameid)
             rng, key = jax.random.split(rng, 2)
             action = jax.random.uniform(key, shape=(n_agents, 3), minval=-1, maxval=1)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             frame = viewer.draw(dyn, state, obs)
             save_frame(
                 dyn, state, obs, f"video/1000agents/frame_{frameid:04d}.png", obs1=True

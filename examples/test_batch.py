@@ -14,7 +14,7 @@ rng = jax.random.PRNGKey(3)
 rng, key_reset = jax.random.split(rng, 2)
 key_reset = jax.random.split(key_reset, batch_size)
 
-state, obs = env.v_reset(key_reset)
+obs, state = env.v_reset(key_reset)
 ep_dones = jnp.zeros(batch_size, dtype=jnp.bool_)
 load_policy = False
 if load_policy:
@@ -44,15 +44,15 @@ while True:
         action = jax.random.uniform(key_action, shape=(batch_size, env.n_agents, 3), minval=-1, maxval=1)
         action = jax.numpy.zeros((batch_size, env.n_agents, 3))
     key_step = jax.random.split(key_step, batch_size)
-    state, obs, rewards, dones, ep_dones = env.v_step(state, action, key_step)
+    obs, state, rewards, dones, ep_dones = env.v_step(state, action, key_step)
 
     if jnp.any(ep_dones):
         rng, key = jax.random.split(rng, 2)
-        state, obs = env.reset_done_episodes(state, obs, ep_dones, key)
+        obs, state = env.reset_done_episodes(obs, state, ep_dones, key)
 
     if viewer.should_quit:
         sys.exit(1)
-    print(state[0]["team"])
+    # print(state[0]["team"])
     print(rewards)
     # obs is an uint8 array of shape [batch_size, n_agents, 84,84,3]
     # rewards is a float32 array of shape [batch_size, n_agents]

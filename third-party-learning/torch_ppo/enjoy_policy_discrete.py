@@ -110,7 +110,7 @@ def evaluation_jax(env_name,obs_type,discrete_actions, actor_critic,actor_critic
 
 
             rng,key_step = jax.random.split(rng, 2)
-            state, obs, rewards, dones, ep_dones = env.step(state, action, key_step)
+            obs, state, rewards, dones, ep_dones = env.step(state, action, key_step)
             # obs is an uint8 array of shape [batch_size, n_agents, 84,84,3]
             # rewards is a float32 array of shape [batch_size, n_agents]
             # dones is a bool array of shape [batch_size, n_agents]

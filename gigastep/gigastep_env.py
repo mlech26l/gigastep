@@ -1,4 +1,7 @@
 import os
+
+import type_enforced
+
 from functools import partial
 import numpy as onp
 import jax.numpy as jnp
@@ -295,6 +298,7 @@ class GigastepEnv:
 
     @partial(jax.jit, static_argnums=(0,))
     def _step_agents(self, state, action, max_thrust):
+        """return next_state"""
         c_heading = 4
         c_dive = 5
         c_dive_throttle = 0.5
@@ -349,7 +353,9 @@ class GigastepEnv:
         return next_state
 
     # @partial(jax.jit, static_argnums=(0,))
-    def step(self, states, actions, rng):
+    @type_enforced.Enforcer
+    def step(self, states: tuple[dict, dict], actions, rng):
+        """returns obs, next_states, reward, dones, episode_done"""
         v_step = jax.vmap(self._step_agents)
 
         agent_states, map_state = states
@@ -693,7 +699,16 @@ class GigastepEnv:
         return states[0]["alive"]
 
     # @partial(jax.jit, static_argnums=(0,))
-    def get_observation(self, states, has_detected, took_damage, rng, agent_id):
+    @type_enforced.Enforcer
+    def get_observation(self, states: tuple[dict, dict], has_detected, took_damage, rng, agent_id):
+        """
+        if self._obs_type == "rgb":
+            return rgb_obs
+        elif self._obs_type == "vector":
+            return vector_obs
+        elif self._obs_type == "rgb_vector":
+            return rgb_obs, vector_obs
+        """
         agent_states, map_state = states
         num_agents = agent_states["x"].shape[0]
         x = agent_states["x"]
@@ -935,7 +950,9 @@ class GigastepEnv:
             )
 
     @partial(jax.jit, static_argnums=(0,))
-    def get_global_observation(self, states):
+    @type_enforced.Enforcer
+    def get_global_observation(self, states: tuple[dict, dict]):
+        """return obs"""
         agent_states, map_state = states
         x = agent_states["x"]
         y = agent_states["y"]
@@ -996,13 +1013,15 @@ class GigastepEnv:
         return obs
 
     @partial(jax.jit, static_argnums=(0,))
-    def set_aux_reward_factor(self, state, aux_rewards_factor):
+    @type_enforced.Enforcer
+    def set_aux_reward_factor(self, state: tuple[dict, dict], aux_rewards_factor):
         agent_states, map_states = state
         map_states["aux_rewards_factor"] = aux_rewards_factor
         return (agent_states, map_states)
 
     # @partial(jax.jit, static_argnums=(0,))
     def reset(self, rng):
+        """return obs, state"""
         rng = jax.random.split(rng, 7)
 
         map_idx = jax.random.randint(rng[5], shape=(), minval=0, maxval=len(self._maps))
@@ -1185,7 +1204,9 @@ class GigastepEnv:
         return obs, state
 
     @partial(jax.jit, static_argnums=(0,))
-    def reset_done_episodes(self, obs, states, ep_dones, rng_key):
+    @type_enforced.Enforcer
+    def reset_done_episodes(self, obs, states: tuple[dict, dict], ep_dones, rng_key):
+        """return obs, reset_states"""
         batch_size = ep_dones.shape[0]
         rng_key = jax.random.split(rng_key, batch_size)
         new_obs, new_states = self.v_reset(rng_key)
@@ -1264,7 +1285,8 @@ class EnvFrameStack:
         self.observation_space = Box(low=low, high=high)
 
     def v_step(self, states, actions, key):
-        states, obs, r, d, ep_dones = self.env.v_step(states, actions, key)
+        """return self.stacked_obs, states, r, d, ep_dones"""
+        obs, states, r, d, ep_dones = self.env.v_step(states, actions, key)
 
         if self.stacked_obs is None:
             self.stacked_obs = jnp.zeros(
@@ -1289,8 +1311,10 @@ class EnvFrameStack:
 
         return self.stacked_obs, states, r, d, ep_dones
 
-    def reset_done_episodes(self, states, obs, ep_dones, key):
-        states, _ = self.env.reset_done_episodes(states, self.obs, ep_dones, key)
+    @type_enforced.Enforcer
+    def reset_done_episodes(self, obs, states: tuple[dict, dict], ep_dones, key):
+        """return self.stacked_obs, states"""
+        _, states = self.env.reset_done_episodes(self.obs, states, ep_dones, key)
         batch_size = self.stacked_obs.shape[0]
         new_obs = jnp.zeros_like(self.stacked_obs)
         self.stacked_obs = jnp.where(
@@ -1300,12 +1324,14 @@ class EnvFrameStack:
         return self.stacked_obs, states
 
     def v_reset(self, key):
-        states, obs = self.env.v_reset(key)
+        """return obs, states"""
+        obs, states = self.env.v_reset(key)
         self.obs = obs
 
         return obs, states
 
     def reset(self):
+        """return self.stacked_obs"""
         obs = self.env.reset()
         self.stacked_obs[:, -self.shape_dim_last :] = obs
         self.obs = obs

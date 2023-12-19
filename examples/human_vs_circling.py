@@ -40,7 +40,7 @@ def loop_user():
             a2 = jnp.repeat(jnp.array([[1, 0, 0]]), 8, axis=0)
             action = jnp.concatenate([a1[None, :], a2], axis=0)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, ep_done = dyn.step(state, action, key)
+            obs, state, r, a, ep_done = dyn.step(state, action, key)
             frame_buffer = viewer.draw(dyn, state, obs)
             frames.append(Image.fromarray(frame_buffer))
             print("len(frames)", len(frames))

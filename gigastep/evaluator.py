@@ -484,7 +484,7 @@ def loop_env(env, policy=None, device="cpu", headless=False, swith_side = False)
                     action = evaluator.merge_actions(action_opp, action_ego)
 
                 rng, key = jax.random.split(rng, 2)
-                state, obs, r, dones, ep_done = env.step(state, action, key)
+                obs, state, r, dones, ep_done = env.step(state, action, key)
                 evaluator.update_step(r, dones, ep_done)
                 if not headless:
                     img = viewer.draw(env, state, obs)

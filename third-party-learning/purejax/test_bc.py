@@ -59,7 +59,7 @@ def loop_user():
 
             action = jnp.where(is_ego[:, None], a1, a2)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, ep_done = env.step(state, action, key)
+            obs, state, r, a, ep_done = env.step(state, action, key)
             print(f"Step {t:04d} reward {r[0]:0.1f}")
             frame_buffer = viewer.draw(env, state, None)
             t += 1

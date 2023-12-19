@@ -28,7 +28,7 @@ def loop_2agents_altitude():
             a3 = GigastepEnv.action(speed=1, dive=1 if t > 10 else 0)
             action = jnp.stack([a1, a2, a3], axis=0)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return
@@ -56,7 +56,7 @@ def loop_speed_up_slow_down():
             a3 = GigastepEnv.action(speed=1 if t > 10 else 0)
             action = jnp.stack([a1, a2, a3], axis=0)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return
@@ -98,7 +98,7 @@ def loop_collide_direct():
             a8 = GigastepEnv.action(speed=1)
             action = jnp.stack([a1, a2, a3, a4, a5, a6, a7, a8], axis=0)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return
@@ -117,12 +117,12 @@ def loop_random_agents():
 
     key, rng = jax.random.split(rng, 2)
     while True:
-        state, obs = dyn.reset(key)
+        obs, state = dyn.reset(key)
         while jnp.sum(dyn.get_dones(state)) > 0:
             rng, key = jax.random.split(rng, 2)
             action = jax.random.uniform(key, shape=(n_agents, 3), minval=-1, maxval=1)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return
@@ -140,7 +140,7 @@ def loop_reset_states():
 
     while True:
         key, rng = jax.random.split(rng, 2)
-        state, obs = dyn.reset(key)
+        obs, state = dyn.reset(key)
         viewer.draw(dyn, state, obs)
         if viewer.should_pause:
             return
@@ -173,7 +173,7 @@ def loop_visible_debug():
         action = [GigastepEnv.action(speed=0) for s in range(state[0]["x"].shape[0])]
         action = jnp.stack(action, axis=0)
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         if viewer.should_pause:
             return
@@ -251,7 +251,7 @@ def loop_agent_sprites():
         # )
         action = jnp.zeros((state[0]["x"].shape[0], 3))
         rng, key = jax.random.split(rng, 2)
-        state, obs, r, a, d = dyn.step(state, action, key)
+        obs, state, r, a, d = dyn.step(state, action, key)
         viewer.draw(dyn, state, obs)
         if viewer.should_pause:
             return
@@ -295,7 +295,7 @@ def loop_collision_with_offset():
             a8 = GigastepEnv.action(speed=1)
             action = jnp.stack([a1, a2, a3, a4, a5, a6, a7, a8], axis=0)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return
@@ -315,13 +315,13 @@ def loop_maps():
 
     key, rng = jax.random.split(rng, 2)
     while True:
-        state, obs = dyn.reset(key)
+        obs, state = dyn.reset(key)
         t = 0
         while jnp.sum(dyn.get_dones(state)) > 0:
             rng, key = jax.random.split(rng, 2)
             action = jax.random.uniform(key, shape=(n_agents, 3), minval=-1, maxval=1)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return
@@ -350,7 +350,7 @@ def loop_heading():
             a2 = GigastepEnv.action(speed=1)
             action = jnp.stack([a1, a2], axis=0)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, d = dyn.step(state, action, key)
+            obs, state, r, a, d = dyn.step(state, action, key)
             print("Health", state[0]["health"])
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
@@ -371,12 +371,12 @@ def loop_communication():
 
     key, rng = jax.random.split(rng, 2)
     while True:
-        state, obs = dyn.reset(key)
+        obs, state = dyn.reset(key)
         while jnp.sum(dyn.get_dones(state)) > 0:
             action = jnp.zeros((n_agents, 3))
             rng, key = jax.random.split(rng, 2)
             # Don't update state
-            _state, obs, r, a, d = dyn.step(state, action, key)
+            obs, _state, r, a, d = dyn.step(state, action, key)
             viewer.draw(dyn, state, obs)
             if viewer.should_pause:
                 return
@@ -384,7 +384,7 @@ def loop_communication():
                 sys.exit(1)
             if viewer.should_reset:
                 rng, key = jax.random.split(rng, 2)
-                state = dyn.reset(key)
+                obs, state = dyn.reset(key)
             time.sleep(SLEEP_TIME)
 
 

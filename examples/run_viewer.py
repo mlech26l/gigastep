@@ -15,7 +15,7 @@ def loop_user():
     rng = jax.random.PRNGKey(1)
     while True:
         key, rng = jax.random.split(rng, 2)
-        state, obs = env.reset(key)
+        obs, state = env.reset(key)
         ep_done = False
         t = 0
         while not ep_done and t < 50:
@@ -24,7 +24,7 @@ def loop_user():
             a2 = jax.random.uniform(key, shape=(env.n_agents, 3), minval=-1, maxval=1)
             action = jnp.where(jnp.arange(env.n_agents)[:, None] == 0, a1, a2)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, ep_done = env.step(state, action, key)
+            obs, state, r, a, ep_done = env.step(state, action, key)
             viewer.draw(env, state, obs)
             if viewer.should_reset:
                 break

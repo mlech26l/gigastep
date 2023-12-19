@@ -11,13 +11,13 @@ from PIL import Image
 def loop_user():
     viewer = GigastepViewer(84 * 4, show_num_agents=1)
     viewer.set_title("User input")
-    env = make_scenario("hide_and_seek_5_vs_5_det")
+    env = make_scenario("hide_and_seek_5_vs_5")
     # env = make_scenario("waypoint_5_vs_5")
     rng = jax.random.PRNGKey(1)
     frames = []
     while True:
         rng, key = jax.random.split(rng, 2)
-        state, obs = env.reset(key)
+        obs, state = env.reset(key)
         t = 0
         ep_done = False
         while not ep_done:
@@ -30,7 +30,7 @@ def loop_user():
             is_ego = jnp.arange(env.n_agents) == 0
             action = jnp.where(is_ego[:, None], a1, a2)
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, a, ep_done = env.step(state, action, key)
+            obs, state, r, a, ep_done = env.step(state, action, key)
             print(f"Step {t:04d} reward {r[0]:0.1f}")
             frame_buffer = viewer.draw(env, state, obs)
             t += 1

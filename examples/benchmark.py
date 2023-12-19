@@ -73,7 +73,7 @@ def run_single_no_scan(env, params, n_steps, repeats=1):
                 actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
             else:
                 actions = params.apply_fn(params.params, obs)
-            states, obs, r, a, d = env.step(states, actions, key)
+            obs, states, r, a, d = env.step(states, actions, key)
     obs.block_until_ready()
 
 
@@ -87,7 +87,7 @@ def run_single_scan(env, params, n_steps, repeats=1):
         else:
             actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
-        states, obs, r, a, d = env.step(states, actions, key)
+        obs, states, r, a, d = env.step(states, actions, key)
         carry = [states, obs, rng]
         return carry, []
 

@@ -25,7 +25,7 @@ def circle_vs_straight(env):
     while True:
         ep_done = False
         key, rng = jax.random.split(rng, 2)
-        state, obs = env.reset(key)
+        obs, state = env.reset(key)
         while not ep_done:
             rng, key, key2 = jax.random.split(rng, 3)
             action_ego = jnp.zeros((env.n_agents, 3))
@@ -35,7 +35,7 @@ def circle_vs_straight(env):
             action = evaluator.merge_actions(action_ego, action_opp)
 
             rng, key = jax.random.split(rng, 2)
-            state, obs, r, dones, ep_done = env.step(state, action, key)
+            obs, state, r, dones, ep_done = env.step(state, action, key)
             evaluator.update_step(r, dones, ep_done)
 
             img = viewer.draw(env, state, obs)
@@ -90,7 +90,7 @@ def replay_policy(env, params):
                 action = evaluator.merge_actions(action_ego, action_opp)
 
                 rng, key = jax.random.split(rng, 2)
-                state, obs, r, dones, ep_done = env.step(state, action, key)
+                obs, state, r, dones, ep_done = env.step(state, action, key)
                 evaluator.update_step(r, dones, ep_done)
 
                 img = viewer.draw(env, state, obs)

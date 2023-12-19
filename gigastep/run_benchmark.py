@@ -26,7 +26,7 @@ def run_vmapped_no_scan(env, params, batch_size, n_steps, repeats=1):
     for _ in range(repeats):
         rng, key = jax.random.split(rng, 2)
         key = jax.random.split(key, batch_size)
-        states, obs = env.v_reset(key)
+        obs, states = env.v_reset(key)
         for i in range(n_steps):
             rng, key = jax.random.split(rng, 2)
             if params is None:
@@ -36,7 +36,7 @@ def run_vmapped_no_scan(env, params, batch_size, n_steps, repeats=1):
             else:
                 actions = params.apply_fn(params.params, obs)
             key = jax.random.split(key, batch_size)
-            states, obs, r, a, d = env.v_step(states, actions, key)
+            obs, states, r, a, d = env.v_step(states, actions, key)
     obs.block_until_ready()
 
 
@@ -44,23 +44,23 @@ def run_vmapped_scan(env, params, batch_size, n_steps, repeats=1):
     rng = jax.random.PRNGKey(1)
 
     def policy_step(state_carry, tmp):
-        states, obs, rng = state_carry
+        obs, states, rng = state_carry
         if params is None:
             actions = jnp.zeros((batch_size, env.n_agents, env.action_space.shape[0]))
         else:
             actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
         key = jax.random.split(key, batch_size)
-        states, obs, r, a, d = env.v_step(states, actions, key)
-        carry = [states, obs, rng]
+        obs, states, r, a, d = env.v_step(states, actions, key)
+        carry = [obs, states, rng]
         return carry, []
 
     # Scan over episode step loop
     for _ in range(repeats):
         rng, key = jax.random.split(rng, 2)
         key = jax.random.split(key, batch_size)
-        states, obs = env.v_reset(key)
-        _, scan_out = jax.lax.scan(policy_step, [states, obs, rng], [], length=n_steps)
+        obs, states = env.v_reset(key)
+        _, scan_out = jax.lax.scan(policy_step, [obs, states, rng], [], length=n_steps)
     scan_out[1].block_until_ready()
 
 
@@ -68,14 +68,14 @@ def run_single_no_scan(env, params, n_steps, repeats=1):
     rng = jax.random.PRNGKey(1)
     for _ in range(repeats):
         rng, key = jax.random.split(rng, 2)
-        states, obs = env.reset(key)
+        obs, states = env.reset(key)
         for i in range(n_steps):
             rng, key = jax.random.split(rng, 2)
             if params is None:
                 actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
             else:
                 actions = params.apply_fn(params.params, obs)
-            states, obs, r, a, d = env.step(states, actions, key)
+            obs, states, r, a, d = env.step(states, actions, key)
     obs.block_until_ready()
 
 
@@ -83,21 +83,21 @@ def run_single_scan(env, params, n_steps, repeats=1):
     rng = jax.random.PRNGKey(1)
 
     def policy_step(state_carry, tmp):
-        states, obs, rng = state_carry
+        obs, states, rng = state_carry
         if params is None:
             actions = jnp.zeros((env.n_agents, env.action_space.shape[0]))
         else:
             actions = params.apply_fn(params.params, obs)
         rng, key = jax.random.split(rng, 2)
-        states, obs, r, a, d = env.step(states, actions, key)
-        carry = [states, obs, rng]
+        obs, states, r, a, d = env.step(states, actions, key)
+        carry = [obs, states, rng]
         return carry, []
 
     # Scan over episode step loop
     for _ in range(repeats):
         rng, key = jax.random.split(rng, 2)
-        states, obs = env.reset(key)
-        _, scan_out = jax.lax.scan(policy_step, [states, obs, rng], [], length=n_steps)
+        obs, states = env.reset(key)
+        _, scan_out = jax.lax.scan(policy_step, [obs, states, rng], [], length=n_steps)
 
     scan_out[1].block_until_ready()
 
